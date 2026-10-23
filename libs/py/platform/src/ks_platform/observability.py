@@ -16,7 +16,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import MetricReader, PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter
 from sqlalchemy.ext.asyncio import AsyncEngine
 from structlog.typing import EventDict, Processor
 
@@ -84,10 +84,8 @@ def configure_logging(service_name: str, level: str) -> None:
     root.setLevel(level.upper())
 
 
-def configure_observability(
-    app: FastAPI, settings: BaseServiceSettings, engine: AsyncEngine | None = None
-) -> None:
-    """Providers OTel (OTLP gRPC quando `otel_endpoint` existe) e instrumentação."""
+def build_providers(settings: BaseServiceSettings) -> tuple[TracerProvider, MeterProvider]:
+    """Cria os providers; só adiciona exportadores OTLP quando `otel_endpoint` existe."""
     resource = Resource.create({SERVICE_NAME: settings.service_name})
     tracer_provider = TracerProvider(resource=resource)
     readers: list[MetricReader] = []
@@ -98,18 +96,45 @@ def configure_observability(
         readers.append(
             PeriodicExportingMetricReader(OTLPMetricExporter(endpoint=settings.otel_endpoint))
         )
-    meter_provider = MeterProvider(resource=resource, metric_readers=readers)
-    trace.set_tracer_provider(tracer_provider)
-    metrics.set_meter_provider(meter_provider)
+    return tracer_provider, MeterProvider(resource=resource, metric_readers=readers)
+
+
+# Estado global do processo: providers e instrumentadores globais são criados uma vez só.
+_providers: tuple[TracerProvider, MeterProvider] | None = None
+
+
+def configure_observability(
+    app: FastAPI,
+    settings: BaseServiceSettings,
+    engine: AsyncEngine | None = None,
+    *,
+    span_exporter: SpanExporter | None = None,
+) -> None:
+    """Providers OTel (OTLP gRPC quando `otel_endpoint` existe) e instrumentação.
+
+    Idempotente: providers e instrumentadores globais (httpx, asyncpg) são configurados
+    na primeira chamada; a cada chamada o `app` e o `engine` recebidos são instrumentados.
+    `span_exporter` (opcional, para testes) recebe todos os spans via processador síncrono.
+    """
+    global _providers
+    if _providers is None:
+        tracer_provider, meter_provider = build_providers(settings)
+        trace.set_tracer_provider(tracer_provider)
+        metrics.set_meter_provider(meter_provider)
+        HTTPXClientInstrumentor().instrument(
+            tracer_provider=tracer_provider, meter_provider=meter_provider
+        )
+        AsyncPGInstrumentor().instrument(tracer_provider=tracer_provider)
+        _providers = (tracer_provider, meter_provider)
+    tracer_provider, meter_provider = _providers
+    if span_exporter is not None:
+        tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
 
     FastAPIInstrumentor.instrument_app(
         app, tracer_provider=tracer_provider, meter_provider=meter_provider
     )
-    HTTPXClientInstrumentor().instrument(
-        tracer_provider=tracer_provider, meter_provider=meter_provider
-    )
-    AsyncPGInstrumentor().instrument(tracer_provider=tracer_provider)
     if engine is not None:
-        SQLAlchemyInstrumentor().instrument(
+        # `instrument()` ignora engines novos depois da primeira chamada; `_instrument` não.
+        SQLAlchemyInstrumentor()._instrument(  # noqa: SLF001
             engine=engine.sync_engine, tracer_provider=tracer_provider
         )

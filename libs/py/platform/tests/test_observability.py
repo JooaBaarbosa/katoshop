@@ -2,12 +2,27 @@
 import json
 import logging
 
+import pytest
 import structlog
 from fastapi import FastAPI
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.metrics import _internal as metrics_internal
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind
 from pydantic_settings import SettingsConfigDict
 
-from ks_platform.observability import configure_logging, configure_observability
+from ks_platform import observability
+from ks_platform.observability import (
+    build_providers,
+    configure_logging,
+    configure_observability,
+)
 from ks_platform.settings import BaseServiceSettings
 
 
@@ -70,15 +85,61 @@ class _Settings(BaseServiceSettings):
     model_config = SettingsConfigDict(env_prefix="KS_TEST_")
 
 
-async def test_configure_observability_without_endpoint_is_noop_exporter(asgi_client_factory):
-    settings = _Settings(service_name="svc", database_url="x", jwks_url="y")
+def _settings(endpoint: str | None = None) -> _Settings:
+    return _Settings(service_name="svc", database_url="x", jwks_url="y", otel_endpoint=endpoint)
+
+
+@pytest.fixture
+def otel_reset():
+    """Desfaz o estado global do OTel para que os testes não vazem providers."""
+    yield
+    HTTPXClientInstrumentor().uninstrument()
+    AsyncPGInstrumentor().uninstrument()
+    observability._providers = None  # noqa: SLF001
+    trace._TRACER_PROVIDER = None  # noqa: SLF001
+    trace._TRACER_PROVIDER_SET_ONCE._done = False  # noqa: SLF001
+    metrics_internal._METER_PROVIDER = None  # noqa: SLF001
+    metrics_internal._METER_PROVIDER_SET_ONCE._done = False  # noqa: SLF001
+
+
+def _app() -> FastAPI:
     app = FastAPI()
 
     @app.get("/ping")
     async def ping() -> dict[str, str]:
         return {"ok": "1"}
 
-    configure_observability(app, settings)
-    async with asgi_client_factory(app) as client:
-        response = await client.get("/ping")
-    assert response.status_code == 200
+    return app
+
+
+def test_providers_without_endpoint_have_no_otlp_and_carry_service_name():
+    tracer_provider, meter_provider = build_providers(_settings())
+    assert tracer_provider._active_span_processor._span_processors == ()  # noqa: SLF001
+    assert meter_provider._metric_readers == []  # noqa: SLF001
+    assert tracer_provider.resource.attributes["service.name"] == "svc"
+    assert meter_provider._sdk_config.resource.attributes["service.name"] == "svc"  # noqa: SLF001
+
+
+def test_providers_with_endpoint_configure_otlp_exporters():
+    tracer_provider, meter_provider = build_providers(_settings("http://localhost:4317"))
+    (processor,) = tracer_provider._active_span_processor._span_processors  # noqa: SLF001
+    assert isinstance(getattr(processor, "span_exporter", None), OTLPSpanExporter)
+    (reader,) = meter_provider._metric_readers  # noqa: SLF001
+    assert isinstance(reader, PeriodicExportingMetricReader)
+    assert isinstance(reader._exporter, OTLPMetricExporter)  # noqa: SLF001
+    tracer_provider.shutdown()
+    meter_provider.shutdown()
+
+
+async def test_configure_observability_twice_instruments_both_apps(asgi_client_factory, otel_reset):
+    exporter = InMemorySpanExporter()
+    app1, app2 = _app(), _app()
+    configure_observability(app1, _settings(), span_exporter=exporter)
+    configure_observability(app2, _settings())
+    for app in (app1, app2):
+        exporter.clear()
+        async with asgi_client_factory(app) as client:
+            assert (await client.get("/ping")).status_code == 200
+        servers = [s for s in exporter.get_finished_spans() if s.kind == SpanKind.SERVER]
+        assert servers, "no server span"
+        assert servers[0].resource.attributes["service.name"] == "svc"

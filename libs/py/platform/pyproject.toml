@@ -10,12 +10,29 @@ dependencies = [
     "PyJWT[crypto]==2.15.1",
     "cryptography==50.0.2",
     "httpx==0.28.1",
+    "structlog==26.1.0",
+    "opentelemetry-sdk==1.45.1",
+    "opentelemetry-exporter-otlp-proto-grpc==1.45.1",
+    "opentelemetry-instrumentation-fastapi==0.66b1",
+    "opentelemetry-instrumentation-httpx==0.66b1",
+    "opentelemetry-instrumentation-sqlalchemy==0.66b1",
+    "opentelemetry-instrumentation-asyncpg==0.66b1",
+    "SQLAlchemy[asyncio]==2.1.6",
+    "asyncpg==0.32.0",
+]
+
+[project.optional-dependencies]
+testing = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "testcontainers[postgres]==4.15.0",
+    "asgi-lifespan==2.1.0",
+    "alembic==1.20.1",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx==0.28.1",
-    "pytest-asyncio==1.4.0",
+    "katoshop-platform[testing]",
 ]
 
 [build-system]

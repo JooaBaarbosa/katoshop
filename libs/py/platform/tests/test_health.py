@@ -1,13 +1,11 @@
 import logging
 
-import httpx
 from fastapi import FastAPI
-from httpx import ASGITransport
 
 from ks_platform.health import health_router
 
 
-def make_client(result: bool | Exception) -> httpx.AsyncClient:
+def make_app(result: bool | Exception) -> FastAPI:
     async def check() -> bool:
         if isinstance(result, Exception):
             raise result
@@ -15,38 +13,38 @@ def make_client(result: bool | Exception) -> httpx.AsyncClient:
 
     app = FastAPI()
     app.include_router(health_router(check))
-    return httpx.AsyncClient(transport=ASGITransport(app), base_url="http://test")
+    return app
 
 
-async def test_live_ok():
-    async with make_client(True) as c:
+async def test_live_ok(asgi_client_factory):
+    async with asgi_client_factory(make_app(True)) as c:
         response = await c.get("/health/live")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
 
-async def test_ready_ok():
-    async with make_client(True) as c:
+async def test_ready_ok(asgi_client_factory):
+    async with asgi_client_factory(make_app(True)) as c:
         response = await c.get("/health/ready")
     assert response.status_code == 200
 
 
-async def test_ready_returns_503_when_check_fails():
-    async with make_client(False) as c:
+async def test_ready_returns_503_when_check_fails(asgi_client_factory):
+    async with asgi_client_factory(make_app(False)) as c:
         response = await c.get("/health/ready")
     assert response.status_code == 503
     assert response.json() == {"status": "unavailable"}
 
 
-async def test_ready_returns_503_when_check_raises():
-    async with make_client(ConnectionError("db")) as c:
+async def test_ready_returns_503_when_check_raises(asgi_client_factory):
+    async with asgi_client_factory(make_app(ConnectionError("db"))) as c:
         response = await c.get("/health/ready")
     assert response.status_code == 503
 
 
-async def test_ready_logs_when_check_raises(caplog):
+async def test_ready_logs_when_check_raises(asgi_client_factory, caplog):
     with caplog.at_level(logging.WARNING, logger="ks_platform.health"):
-        async with make_client(ConnectionError("db")) as c:
+        async with asgi_client_factory(make_app(ConnectionError("db"))) as c:
             response = await c.get("/health/ready")
     assert response.text == '{"status":"unavailable"}'
     assert any("ready_check failed" in r.message and r.exc_info for r in caplog.records)

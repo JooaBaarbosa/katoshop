@@ -1,6 +1,4 @@
-import httpx
 from fastapi import FastAPI
-from httpx import ASGITransport
 from pydantic import BaseModel
 
 from ks_platform.errors import ProblemError, install_problem_handlers
@@ -33,14 +31,8 @@ def make_app() -> FastAPI:
     return app
 
 
-def client(app: FastAPI) -> httpx.AsyncClient:
-    return httpx.AsyncClient(
-        transport=ASGITransport(app, raise_app_exceptions=False), base_url="http://test"
-    )
-
-
-async def test_problem_error_rendered():
-    async with client(make_app()) as c:
+async def test_problem_error_rendered(asgi_client_factory):
+    async with asgi_client_factory(make_app()) as c:
         response = await c.get("/conflict")
     assert response.status_code == 409
     assert response.headers["content-type"].startswith("application/problem+json")
@@ -51,8 +43,8 @@ async def test_problem_error_rendered():
     assert body["trace_id"] is None
 
 
-async def test_validation_error_maps_fields():
-    async with client(make_app()) as c:
+async def test_validation_error_maps_fields(asgi_client_factory):
+    async with asgi_client_factory(make_app()) as c:
         response = await c.post("/items", json={})
     assert response.status_code == 422
     body = response.json()
@@ -60,32 +52,32 @@ async def test_validation_error_maps_fields():
     assert "body.email" in body["errors"]
 
 
-async def test_http_exception_mapped():
-    async with client(make_app()) as c:
+async def test_http_exception_mapped(asgi_client_factory):
+    async with asgi_client_factory(make_app()) as c:
         response = await c.get("/nao-existe")
     assert response.status_code == 404
     assert response.json()["code"] == "http.404"
     assert response.headers["content-type"].startswith("application/problem+json")
 
 
-async def test_unhandled_error_hides_details():
-    async with client(make_app()) as c:
+async def test_unhandled_error_hides_details(asgi_client_factory):
+    async with asgi_client_factory(make_app()) as c:
         response = await c.get("/boom")
     assert response.status_code == 500
     assert "segredo" not in response.text
     assert response.json()["code"] == "internal.error"
 
 
-async def test_http_exception_keeps_headers():
-    async with client(make_app()) as c:
+async def test_http_exception_keeps_headers(asgi_client_factory):
+    async with asgi_client_factory(make_app()) as c:
         response = await c.post("/conflict")
     assert response.status_code == 405
     assert "GET" in response.headers["allow"]
     assert response.json()["code"] == "http.405"
 
 
-async def test_problem_error_headers_forwarded():
-    async with client(make_app()) as c:
+async def test_problem_error_headers_forwarded(asgi_client_factory):
+    async with asgi_client_factory(make_app()) as c:
         response = await c.get("/auth")
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"

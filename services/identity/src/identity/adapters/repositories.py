@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from identity.adapters.models import RefreshToken, Role, User, UserRole
@@ -64,6 +65,7 @@ class SqlUserRepository:
         return UserRecord(
             id=user.id,
             email=user.email,
+            name=user.name,
             password_hash=user.password_hash,
             kind=user.kind,
             status=user.status,
@@ -90,6 +92,34 @@ class SqlUserRepository:
             .returning(User.id)
         )
         return None if user_id is None else await self.get_by_id(user_id)
+
+    async def update_profile(
+        self,
+        user_id: uuid.UUID,
+        *,
+        name: str | None = None,
+        email: str | None = None,
+        password_hash: str | None = None,
+    ) -> bool:
+        values = {
+            column: value
+            for column, value in (
+                ("name", name),
+                ("email", email),
+                ("password_hash", password_hash),
+            )
+            if value is not None
+        }
+        if not values:
+            return True
+        try:
+            async with self._scope.session.begin_nested():
+                await self._scope.session.execute(
+                    update(User).where(User.id == user_id).values(**values)
+                )
+        except IntegrityError:
+            return False
+        return True
 
     async def save_login_state(self, user_id: uuid.UUID, state: LoginState) -> None:
         await self._scope.session.execute(

@@ -1,14 +1,26 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 
 from identity.adapters.models import SigningKey as SigningKeyRow
+from identity.adapters.repositories import (
+    SessionScope,
+    SqlRefreshTokenRepository,
+    SqlUserRepository,
+)
 from identity.adapters.signing import load_signing_key
+from identity.api.routes_auth import router as auth_router
 from identity.api.routes_jwks import router as jwks_router
+from identity.api.routes_me import router as me_router
+from identity.application.auth_service import AuthService
+from identity.domain.passwords import validate_password
 from identity.settings import IdentitySettings
+from ks_platform.auth import JwksKeyProvider, TokenVerifier
 from ks_platform.db import make_engine, make_session_factory
 from ks_platform.errors import install_problem_handlers
 from ks_platform.health import health_router
@@ -27,6 +39,18 @@ def create_app(settings: IdentitySettings | None = None) -> FastAPI:
         return True
 
     signing_key = load_signing_key(settings.signing_key_path)
+
+    scope = SessionScope(session_factory)
+    auth = AuthService(
+        SqlUserRepository(scope),
+        SqlRefreshTokenRepository(scope),
+        signing_key,
+        lambda: datetime.now(UTC),
+    )
+
+    async def local_jwks(_url: str) -> dict[str, Any]:
+        # o identity verifica os próprios tokens em processo, sem HTTP para si mesmo
+        return {"keys": [signing_key.public_jwk()]}
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -50,6 +74,18 @@ def create_app(settings: IdentitySettings | None = None) -> FastAPI:
                         },
                     )
                 )
+            if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
+                violations = validate_password(
+                    settings.bootstrap_admin_password, settings.bootstrap_admin_email.strip()
+                )
+                if violations:
+                    raise RuntimeError(
+                        "IDENTITY_BOOTSTRAP_ADMIN_PASSWORD viola a política de senha: "
+                        + ", ".join(violations)
+                    )
+                await auth.ensure_bootstrap_admin(
+                    settings.bootstrap_admin_email, settings.bootstrap_admin_password
+                )
             yield
         finally:
             await engine.dispose()
@@ -58,10 +94,14 @@ def create_app(settings: IdentitySettings | None = None) -> FastAPI:
     app.state.signing_key = signing_key
     app.state.settings = settings
     app.state.session_factory = session_factory
+    app.state.auth_service = auth
+    app.state.token_verifier = TokenVerifier(JwksKeyProvider(settings.jwks_url, fetch=local_jwks))
     install_problem_handlers(app)
     configure_observability(app, settings, engine)
     app.include_router(health_router(ready_check))
     app.include_router(jwks_router)
+    app.include_router(auth_router)
+    app.include_router(me_router)
     return app
 
 

@@ -11,6 +11,7 @@ from identity.domain.lockout import LoginState
 class UserRecord:
     id: uuid.UUID
     email: str
+    name: str
     password_hash: str
     kind: str
     status: str
@@ -43,6 +44,17 @@ class UserRepository(Transactional, Protocol):
 
     async def add(self, email: str, password_hash: str, name: str, kind: str) -> UserRecord | None:
         """Insere o usuário; devolve None se o email (case-insensitive) já existe."""
+        ...
+
+    async def update_profile(
+        self,
+        user_id: uuid.UUID,
+        *,
+        name: str | None = None,
+        email: str | None = None,
+        password_hash: str | None = None,
+    ) -> bool:
+        """Atualiza só os campos informados; devolve False se o novo email já existe."""
         ...
 
     async def save_login_state(self, user_id: uuid.UUID, state: LoginState) -> None: ...

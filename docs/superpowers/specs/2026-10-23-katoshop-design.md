@@ -1,7 +1,7 @@
 # KatoShop: design geral e fatia 1
 
 - **Data:** 2026-10-23
-- **Status:** aguardando revisão
+- **Status:** aprovado em 2026-10-23
 - **Escopo deste documento:** a arquitetura e as convenções que valem para todas as fatias, a identidade visual e o detalhamento completo da fatia 1. As fatias 2 a 5 recebem specs próprias.
 
 ## 1. Visão
@@ -133,7 +133,7 @@ katoshop/
 
 ### 4.2 Backend (Python)
 
-- Python 3.14 (`requires-python = ">=3.14,<3.15"`). Workspace uv com um pacote por serviço e a lib `platform`.
+- Python 3.15 (`requires-python = ">=3.15,<3.16"`), imagem base `python:3.15.1-slim`. Workspace uv com um pacote por serviço e a lib `platform`.
 - FastAPI, Pydantic v2, SQLAlchemy 2 async com asyncpg, Alembic.
 - Camadas: `api` → `application` → `domain`, com `adapters` implementando portas definidas em `application`. O domínio não importa FastAPI nem SQLAlchemy.
 - **API:**
@@ -211,7 +211,7 @@ Versões estáveis conferidas em 2026-10-23 nos registries oficiais (PyPI, npm, 
 
 | Tecnologia | Versão |
 |---|---|
-| Python | 3.14.9 |
+| Python | 3.15.1 |
 | uv | 0.13.5 |
 | FastAPI | 0.161.1 |
 | Uvicorn | 0.54.0 |
@@ -253,7 +253,7 @@ Versões estáveis conferidas em 2026-10-23 nos registries oficiais (PyPI, npm, 
 
 Observações:
 - O Node 26 é a linha "Current", ainda não LTS. Por isso usamos a LTS ativa.
-- O Python 3.15.1 já está estável, mas o `CLAUDE.md` fixa a linha 3.14. Ver a seção 10.
+- Python 3.15.1: todas as dependências com extensão nativa (asyncpg, pydantic-core, SQLAlchemy, cryptography, uvloop, httptools, greenlet, argon2-cffi-bindings) já publicam wheels cp315 ou abi3.
 
 ## 6. Identidade visual
 
@@ -492,7 +492,7 @@ Visual:
 | Versões muito novas com pouca documentação (Next 16.4, TS 7, Tailwind 4.3) | Conferir as notas de versão no início do plano. Se uma versão estável quebrar a integração, registrar em ADR e usar a última estável que funciona |
 | Sandboxes externas instáveis (fatia 3) | O provider fake é o padrão e o sandbox real é opt-in por variável de ambiente |
 
-## 10. Pontos pendentes de confirmação
+## 10. Decisões finais
 
-1. **Linha do Python:** o `CLAUDE.md` fixa 3.14 (referência 3.14.8), mas a regra "versão estável mais atual" aponta para 3.14.9 dentro da linha, e o 3.15.1 já está estável. Esta spec usa 3.14.9. Atualizar a referência do `CLAUDE.md` para 3.14.9, ou migrar para a linha 3.15, depende da decisão do usuário.
-2. **Licença do repositório:** proposta MIT, por ser template de portfólio.
+1. **Python 3.15.1**, decidido pelo usuário em 2026-10-23. O `CLAUDE.md` da pasta foi atualizado para a linha 3.15.
+2. **Licença MIT.**

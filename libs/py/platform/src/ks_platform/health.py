@@ -1,7 +1,10 @@
+import logging
 from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger("ks_platform.health")
 
 
 def health_router(ready_check: Callable[[], Awaitable[bool]]) -> APIRouter:
@@ -16,6 +19,7 @@ def health_router(ready_check: Callable[[], Awaitable[bool]]) -> APIRouter:
         try:
             ok = await ready_check()
         except Exception:
+            logger.warning("ready_check failed", exc_info=True)
             ok = False
         if ok:
             return JSONResponse({"status": "ok"})

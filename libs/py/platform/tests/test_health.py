@@ -1,3 +1,5 @@
+import logging
+
 import httpx
 from fastapi import FastAPI
 from httpx import ASGITransport
@@ -40,3 +42,11 @@ async def test_ready_returns_503_when_check_raises():
     async with make_client(ConnectionError("db")) as c:
         response = await c.get("/health/ready")
     assert response.status_code == 503
+
+
+async def test_ready_logs_when_check_raises(caplog):
+    with caplog.at_level(logging.WARNING, logger="ks_platform.health"):
+        async with make_client(ConnectionError("db")) as c:
+            response = await c.get("/health/ready")
+    assert response.text == '{"status":"unavailable"}'
+    assert any("ready_check failed" in r.message and r.exc_info for r in caplog.records)

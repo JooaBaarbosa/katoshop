@@ -18,6 +18,10 @@ def make_app() -> FastAPI:
     async def conflict() -> None:
         raise ProblemError(409, "x.y.z", "Conflito")
 
+    @app.get("/auth")
+    async def auth() -> None:
+        raise ProblemError(401, "auth.x", "Nao", headers={"WWW-Authenticate": "Bearer"})
+
     @app.post("/items")
     async def items(payload: Payload) -> Payload:
         return payload
@@ -70,3 +74,18 @@ async def test_unhandled_error_hides_details():
     assert response.status_code == 500
     assert "segredo" not in response.text
     assert response.json()["code"] == "internal.error"
+
+
+async def test_http_exception_keeps_headers():
+    async with client(make_app()) as c:
+        response = await c.post("/conflict")
+    assert response.status_code == 405
+    assert "GET" in response.headers["allow"]
+    assert response.json()["code"] == "http.405"
+
+
+async def test_problem_error_headers_forwarded():
+    async with client(make_app()) as c:
+        response = await c.get("/auth")
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"

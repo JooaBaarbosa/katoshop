@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -15,8 +17,11 @@ class ProblemError(Exception):
         title: str,
         detail: str | None = None,
         errors: dict[str, list[str]] | None = None,
+        *,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(title)
+        self.headers = headers
         self.status = status
         self.code = code
         self.title = title
@@ -37,6 +42,7 @@ def _problem(
     title: str,
     detail: str | None = None,
     errors: dict[str, list[str]] | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     body: dict[str, object] = {
         "type": "about:blank",
@@ -48,13 +54,13 @@ def _problem(
     }
     if errors is not None:
         body["errors"] = errors
-    return JSONResponse(body, status_code=status, media_type=PROBLEM_MEDIA_TYPE)
+    return JSONResponse(body, status_code=status, media_type=PROBLEM_MEDIA_TYPE, headers=headers)
 
 
 def install_problem_handlers(app: FastAPI) -> None:
     @app.exception_handler(ProblemError)
     async def _problem_error(_: Request, exc: ProblemError) -> JSONResponse:
-        return _problem(exc.status, exc.code, exc.title, exc.detail, exc.errors)
+        return _problem(exc.status, exc.code, exc.title, exc.detail, exc.errors, exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
@@ -67,7 +73,13 @@ def install_problem_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         detail = exc.detail if isinstance(exc.detail, str) else None
-        return _problem(exc.status_code, f"http.{exc.status_code}", detail or "Erro", detail)
+        return _problem(
+            exc.status_code,
+            f"http.{exc.status_code}",
+            detail or "Erro",
+            detail,
+            headers=exc.headers,
+        )
 
     @app.exception_handler(Exception)
     async def _unhandled(_: Request, __: Exception) -> JSONResponse:

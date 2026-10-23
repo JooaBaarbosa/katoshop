@@ -37,4 +37,4 @@ include = ["libs", "services"]
 exclude = ["**/.venv", "**/node_modules"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ks_platform"]
+known-first-party = ["ks_platform", "identity"]

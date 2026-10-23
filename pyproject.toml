@@ -35,3 +35,6 @@ select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
 pythonVersion = "3.15"
 include = ["libs", "services"]
 exclude = ["**/.venv", "**/node_modules"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ks_platform"]

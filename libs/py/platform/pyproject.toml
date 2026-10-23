@@ -3,7 +3,17 @@ name = "katoshop-platform"
 version = "0.1.0"
 description = "Biblioteca compartilhada dos serviços KatoShop"
 requires-python = ">=3.15,<3.16"
-dependencies = []
+dependencies = [
+    "fastapi==0.161.1",
+    "pydantic-settings==2.16.1",
+    "opentelemetry-api==1.45.1",
+]
+
+[dependency-groups]
+dev = [
+    "httpx==0.28.1",
+    "pytest-asyncio==1.4.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -14,3 +24,4 @@ packages = ["src/ks_platform"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"

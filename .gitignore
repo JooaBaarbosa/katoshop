@@ -3,3 +3,10 @@ node_modules/
 .venv/
 __pycache__/
 .env
+infra/secrets/
+.turbo/
+.next/
+test-results/
+playwright-report/
+.lighthouseci/
+media-data/

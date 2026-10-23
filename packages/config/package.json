@@ -1,0 +1,19 @@
+{
+  "name": "@katoshop/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./eslint": "./eslint.config.mjs",
+    "./prettier": "./prettier.config.mjs"
+  },
+  "dependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "typescript": "7.0.2"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}

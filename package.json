@@ -1,0 +1,21 @@
+{
+  "name": "katoshop",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "pnpm@12.15.0",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "dev:up": "echo \"pendente\"",
+    "dev:down": "echo \"pendente\"",
+    "seed": "echo \"pendente\"",
+    "gen:api": "echo \"pendente\"",
+    "test:e2e": "echo \"pendente\"",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10",
+    "turbo": "2.11.10"
+  }
+}

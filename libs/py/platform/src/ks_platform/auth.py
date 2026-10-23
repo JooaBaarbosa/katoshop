@@ -84,17 +84,27 @@ class JwksKeyProvider:
         self._keys: dict[str, Ed25519PublicKey] = {}
         self._loaded_at: float | None = None
         self._last_miss_at: float | None = None
+        self._next_retry_at: float | None = None
         self._lock = asyncio.Lock()
 
+    def _unavailable(self) -> ProblemError:
+        return ProblemError(503, "auth.jwks_unavailable", "Chaves de autenticação indisponíveis")
+
     async def _load(self) -> None:
+        now = time.monotonic()
+        if self._next_retry_at is not None and now < self._next_retry_at:
+            # Em backoff após falha: não chama o fetch, usa o cache (se houver).
+            if self._keys:
+                return
+            raise self._unavailable()
         try:
             document = await self._fetch(self._url)
         except (httpx.HTTPError, ValueError, OSError) as exc:
+            self._next_retry_at = now + self._min_refetch
             if self._keys:
                 return  # mantém as chaves em cache enquanto o JWKS estiver fora
-            raise ProblemError(
-                503, "auth.jwks_unavailable", "Chaves de autenticação indisponíveis"
-            ) from exc
+            raise self._unavailable() from exc
+        self._next_retry_at = None
         self._keys = _parse_jwks(document)
         self._loaded_at = time.monotonic()
 

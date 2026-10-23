@@ -196,6 +196,86 @@ async def test_fetch_failure_is_503_not_500() -> None:
     assert (exc.value.status, exc.value.code) == (503, "auth.jwks_unavailable")
 
 
+class FlakyFetch:
+    def __init__(self, document: dict[str, Any]) -> None:
+        self.document = document
+        self.calls = 0
+        self.failing = False
+
+    async def __call__(self, url: str) -> dict[str, Any]:
+        self.calls += 1
+        if self.failing:
+            raise httpx.ConnectError("down")
+        return self.document
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+async def test_stale_keys_still_verify_when_fetch_fails_after_ttl(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = Clock()
+    monkeypatch.setattr("ks_platform.auth.time.monotonic", clock)
+    signer = Signer()
+    fetch = FlakyFetch({"keys": [signer.jwk]})
+    verifier = TokenVerifier(JwksKeyProvider("http://identity/jwks", fetch=fetch, ttl_seconds=300))
+    await verifier.verify(signer.token(), "admin")
+    fetch.failing = True
+    clock.now += 301
+    principal = await verifier.verify(signer.token(), "admin")
+    assert principal.has_permission("catalog.write")
+    assert fetch.calls == 2
+
+
+async def test_failed_fetch_backoff_skips_fetch_with_stale_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = Clock()
+    monkeypatch.setattr("ks_platform.auth.time.monotonic", clock)
+    signer = Signer()
+    fetch = FlakyFetch({"keys": [signer.jwk]})
+    verifier = TokenVerifier(
+        JwksKeyProvider(
+            "http://identity/jwks", fetch=fetch, ttl_seconds=300, min_refetch_seconds=30
+        )
+    )
+    await verifier.verify(signer.token(), "admin")
+    fetch.failing = True
+    clock.now += 301
+    await verifier.verify(signer.token(), "admin")
+    await verifier.verify(signer.token(), "admin")
+    assert fetch.calls == 2  # a segunda requisição dentro do backoff não chamou o fetch
+    clock.now += 31
+    await verifier.verify(signer.token(), "admin")
+    assert fetch.calls == 3  # passado o backoff, tenta de novo
+
+
+async def test_failed_fetch_backoff_skips_fetch_with_empty_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = Clock()
+    monkeypatch.setattr("ks_platform.auth.time.monotonic", clock)
+    signer = Signer()
+    fetch = FlakyFetch({"keys": [signer.jwk]})
+    fetch.failing = True
+    verifier = TokenVerifier(JwksKeyProvider("http://identity/jwks", fetch=fetch))
+    for _ in range(3):
+        with pytest.raises(ProblemError) as exc:
+            await verifier.verify(signer.token(), "admin")
+        assert (exc.value.status, exc.value.code) == (503, "auth.jwks_unavailable")
+    assert fetch.calls == 1
+    fetch.failing = False
+    clock.now += 31
+    await verifier.verify(signer.token(), "admin")
+    assert fetch.calls == 2
+
+
 def _app(signer: Signer) -> FastAPI:
     app = FastAPI()
     install_problem_handlers(app)

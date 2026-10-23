@@ -6,11 +6,13 @@ on:
       - libs/py/platform/**
       - pyproject.toml
       - uv.lock
+      - .github/workflows/ci-platform.yml
   pull_request:
     paths:
       - libs/py/platform/**
       - pyproject.toml
       - uv.lock
+      - .github/workflows/ci-platform.yml
 
 jobs:
   test:

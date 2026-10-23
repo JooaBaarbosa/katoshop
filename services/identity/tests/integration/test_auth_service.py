@@ -303,3 +303,18 @@ async def test_bootstrap_admin_idempotent(
         "identity.auth.invalid_credentials",
         service.login("admin@katoshop.localhost", PASSWORD, "storefront"),
     )
+
+
+async def test_bootstrap_admin_fails_loudly_when_email_belongs_to_customer(
+    service: AuthService, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    await service.register("admin@katoshop.localhost", PASSWORD, "Cliente")
+
+    with pytest.raises(RuntimeError, match="non-staff"):
+        await service.ensure_bootstrap_admin("Admin@KatoShop.localhost", PASSWORD)
+
+    async with session_factory() as session:
+        staff = await session.scalar(
+            select(func.count()).select_from(User).where(User.kind == "staff")
+        )
+    assert staff == 0

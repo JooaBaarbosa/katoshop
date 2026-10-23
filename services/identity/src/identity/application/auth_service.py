@@ -160,8 +160,12 @@ class AuthService:
                 return
             password_hash = await asyncio.to_thread(hash_password, password)
             user = await self._users.add(email, password_hash, "Administrador", "staff")
-            if user is not None:
-                await self._users.grant_role(user.id, "admin")
+            if user is None:
+                # outra instância pode ter criado o mesmo admin em paralelo: aí está tudo certo
+                if await self._users.any_staff():
+                    return
+                raise RuntimeError("bootstrap admin email already in use by a non-staff user")
+            await self._users.grant_role(user.id, "admin")
 
     async def _issue(self, user: UserRecord, audience: Audience, family_id: uuid.UUID) -> TokenPair:
         pair, _ = await self._issue_with_id(user, audience, family_id)

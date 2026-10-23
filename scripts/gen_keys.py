@@ -1,0 +1,47 @@
+"""Gera a chave de assinatura Ed25519 do identity e prepara o .env local.
+
+Uso (na raiz do repositório): uv run python scripts/gen_keys.py [--force]
+"""
+
+import argparse
+import shutil
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+KEY_RELATIVE_PATH = Path("infra") / "secrets" / "identity-signing-key.pem"
+
+
+def main(argv: Sequence[str] | None = None, root: Path = REPO_ROOT) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--force", action="store_true", help="sobrescreve a chave existente")
+    args = parser.parse_args(argv)
+
+    key_path = root / KEY_RELATIVE_PATH
+    if key_path.exists() and not args.force:
+        print(f"Chave já existe em {key_path}; use --force para sobrescrever.")
+    else:
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        pem = Ed25519PrivateKey.generate().private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        key_path.write_bytes(pem)
+        key_path.chmod(0o600)
+        print(f"Chave gerada em {key_path}")
+
+    env_path = root / ".env"
+    example_path = root / ".env.example"
+    if not env_path.exists() and example_path.exists():
+        shutil.copyfile(example_path, env_path)
+        print(f"Criado {env_path} a partir de .env.example")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

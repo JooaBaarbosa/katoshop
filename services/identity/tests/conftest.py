@@ -4,6 +4,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import FastAPI
 
 from identity.main import create_app
@@ -24,10 +26,15 @@ def migrated_url(postgres_url: str) -> str:
 
 @pytest.fixture
 def settings(migrated_url: str, tmp_path: Path) -> IdentitySettings:
-    return IdentitySettings(
-        database_url=migrated_url,
-        signing_key_path=tmp_path / "signing-key.pem",
+    key_path = tmp_path / "signing-key.pem"
+    key_path.write_bytes(
+        Ed25519PrivateKey.generate().private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
     )
+    return IdentitySettings(database_url=migrated_url, signing_key_path=key_path)
 
 
 @pytest.fixture

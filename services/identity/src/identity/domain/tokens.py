@@ -4,6 +4,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Literal, get_args
 
 import jwt
 from cryptography.hazmat.primitives import serialization
@@ -13,6 +14,11 @@ ISSUER = "katoshop-identity"
 ACCESS_TTL = timedelta(seconds=900)
 REFRESH_TTL = {"storefront": timedelta(days=30), "admin": timedelta(hours=12)}
 REUSE_GRACE = timedelta(seconds=10)
+
+type Audience = Literal["storefront", "admin"]
+type Kind = Literal["customer", "staff"]
+AUDIENCES: frozenset[str] = frozenset(get_args(Audience.__value__))
+KINDS: frozenset[str] = frozenset(get_args(Kind.__value__))
 
 
 @dataclass(frozen=True)
@@ -37,11 +43,17 @@ class SigningKey:
 def issue_access_token(
     key: SigningKey,
     user_id: uuid.UUID,
-    audience: str,
-    kind: str,
+    audience: Audience,
+    kind: Kind,
     roles: list[str],
     now: datetime,
 ) -> str:
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("now precisa ter timezone (naive datetime recusado)")
+    if audience not in AUDIENCES:
+        raise ValueError(f"audience desconhecida: {audience!r}")
+    if kind not in KINDS:
+        raise ValueError(f"kind desconhecido: {kind!r}")
     issued_at = now.astimezone(UTC)
     claims = {
         "iss": ISSUER,

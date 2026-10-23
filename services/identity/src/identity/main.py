@@ -30,27 +30,29 @@ def create_app(settings: IdentitySettings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        public_jwk = signing_key.public_jwk()
-        async with session_factory() as session, session.begin():
-            await session.execute(
-                insert(SigningKeyRow)
-                .values(
-                    kid=signing_key.kid,
-                    public_jwk=public_jwk,
-                    private_key_ref=str(settings.signing_key_path),
-                    active=True,
+        try:
+            public_jwk = signing_key.public_jwk()
+            async with session_factory() as session, session.begin():
+                await session.execute(
+                    insert(SigningKeyRow)
+                    .values(
+                        kid=signing_key.kid,
+                        public_jwk=public_jwk,
+                        private_key_ref=str(settings.signing_key_path),
+                        active=True,
+                    )
+                    .on_conflict_do_update(
+                        index_elements=[SigningKeyRow.kid],
+                        set_={
+                            "public_jwk": public_jwk,
+                            "private_key_ref": str(settings.signing_key_path),
+                            "active": True,
+                        },
+                    )
                 )
-                .on_conflict_do_update(
-                    index_elements=[SigningKeyRow.kid],
-                    set_={
-                        "public_jwk": public_jwk,
-                        "private_key_ref": str(settings.signing_key_path),
-                        "active": True,
-                    },
-                )
-            )
-        yield
-        await engine.dispose()
+            yield
+        finally:
+            await engine.dispose()
 
     app = FastAPI(title="KatoShop identity", lifespan=lifespan)
     app.state.signing_key = signing_key

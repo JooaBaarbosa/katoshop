@@ -77,3 +77,26 @@ def test_kid_is_16_hex_of_public_key_sha256(signing_key: SigningKey) -> None:
     assert jwk["use"] == "sig"
     assert "=" not in jwk["x"]
     assert "d" not in jwk
+
+
+def test_issue_access_token_rejects_naive_now(signing_key: SigningKey) -> None:
+    with pytest.raises(ValueError, match="timezone"):
+        issue_access_token(signing_key, uuid.uuid4(), "storefront", "customer", [], datetime.now())  # noqa: DTZ005
+
+
+@pytest.mark.parametrize(
+    ("audience", "kind"),
+    [("backoffice", "staff"), ("admin", "robot"), ("", "customer")],
+)
+def test_issue_access_token_rejects_unknown_audience_or_kind(
+    signing_key: SigningKey, audience: str, kind: str
+) -> None:
+    with pytest.raises(ValueError, match="audience|kind"):
+        issue_access_token(
+            signing_key,
+            uuid.uuid4(),
+            audience,  # pyright: ignore[reportArgumentType]
+            kind,  # pyright: ignore[reportArgumentType]
+            [],
+            datetime.now(UTC),
+        )

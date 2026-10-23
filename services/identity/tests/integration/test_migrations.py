@@ -1,6 +1,10 @@
 import httpx
+from alembic.autogenerate import compare_metadata
+from alembic.migration import MigrationContext
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine
+
+from identity.adapters.models import Base
 
 EXPECTED_TABLES = {"users", "roles", "user_roles", "refresh_tokens", "signing_keys"}
 
@@ -48,3 +52,15 @@ async def test_schema_constraints(migrated_url: str) -> None:
 async def test_ready_ok(client: httpx.AsyncClient) -> None:
     response = await client.get("/health/ready")
     assert response.status_code == 200
+
+
+async def test_models_match_migrations(migrated_url: str) -> None:
+    engine = create_async_engine(migrated_url)
+    try:
+        async with engine.connect() as conn:
+            diff = await conn.run_sync(
+                lambda sync: compare_metadata(MigrationContext.configure(sync), Base.metadata)
+            )
+    finally:
+        await engine.dispose()
+    assert diff == []

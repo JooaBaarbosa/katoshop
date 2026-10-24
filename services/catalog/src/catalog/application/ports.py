@@ -136,6 +136,19 @@ class Overview:
     recent_movements: list[RecentMovement]
 
 
+# ---------------------------------------------------------------------------- armazenamento
+
+
+class ImageStorage(Protocol):
+    async def save(self, key: str, data: bytes) -> None:
+        """Grava de forma atômica e idempotente; `ValueError` se a chave for inválida."""
+        ...
+
+    async def read(self, key: str) -> bytes | None:
+        """`None` se não existir; `ValueError` se a chave for inválida."""
+        ...
+
+
 # ---------------------------------------------------------------------------- repositórios
 
 
@@ -211,6 +224,26 @@ class ProductRepository(Protocol):
     async def update_variant_versioned(
         self, variant_id: uuid.UUID, expected_version: int, fields: dict[str, Any]
     ) -> bool: ...
+
+    async def add_image(
+        self,
+        product_id: uuid.UUID,
+        *,
+        storage_key: str,
+        width: int,
+        height: int,
+        alt: str,
+        color_code: str | None,
+        position: int,
+        credit_author: str | None,
+        credit_source_url: str | None,
+        license: str | None,
+    ) -> ImageRecord: ...
+    async def get_image(self, image_id: uuid.UUID) -> ImageRecord | None: ...
+    async def update_image(self, image_id: uuid.UUID, fields: dict[str, Any]) -> None: ...
+    async def delete_image(self, image_id: uuid.UUID) -> bool:
+        """Remove só a linha; o arquivo é endereçado por conteúdo e pode ser compartilhado."""
+        ...
 
 
 class StockRepository(Protocol):

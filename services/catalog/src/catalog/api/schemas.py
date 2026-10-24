@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, ClassVar, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from catalog.application.ports import (
     CategoryRecord,
@@ -194,6 +194,37 @@ class AdminVariantWithPrice(AdminVariant):
     effective_price_cents: int
 
 
+ImageAlt = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+ImageText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+ImageSourceUrl = Annotated[str, Field(max_length=2000, pattern=r"^https?://\S+$")]
+
+
+class ImageUploadIn(_In):
+    """Campos de texto do multipart; `alt` é validado antes, com código próprio."""
+
+    color_code: OptionCode | None = None
+    credit_author: ImageText | None = None
+    credit_source_url: ImageSourceUrl | None = None
+    license: ImageText | None = None
+
+
+class ImagePatch(_Patch):
+    nullable: ClassVar[frozenset[str]] = frozenset(
+        {"color_code", "credit_author", "credit_source_url", "license"}
+    )
+
+    alt: ImageAlt | None = None
+    color_code: OptionCode | None = None
+    position: Annotated[int, Field(ge=0, le=1000)] | None = None
+    credit_author: ImageText | None = None
+    credit_source_url: ImageSourceUrl | None = None
+    license: ImageText | None = None
+
+
+def media_url(public_base_url: str, key: str) -> str:
+    return f"{public_base_url.rstrip('/')}/v1/media/{key}"
+
+
 class AdminImage(BaseModel):
     id: uuid.UUID
     color_code: str | None
@@ -205,11 +236,13 @@ class AdminImage(BaseModel):
     credit_author: str | None
     credit_source_url: str | None
     license: str | None
+    url: str
 
     @classmethod
-    def from_record(cls, i: ImageRecord) -> AdminImage:
+    def from_record(cls, i: ImageRecord, public_base_url: str) -> AdminImage:
         return cls(
             id=i.id,
+            url=media_url(public_base_url, i.storage_key),
             color_code=i.color_code,
             storage_key=i.storage_key,
             width=i.width,
@@ -257,7 +290,7 @@ class AdminProduct(BaseModel):
     images: list[AdminImage]
 
     @classmethod
-    def from_record(cls, p: ProductRecord) -> AdminProduct:
+    def from_record(cls, p: ProductRecord, public_base_url: str) -> AdminProduct:
         return cls(
             id=p.id,
             slug=p.slug,
@@ -280,7 +313,7 @@ class AdminProduct(BaseModel):
                 )
                 for v in p.variants
             ],
-            images=[AdminImage.from_record(i) for i in p.images],
+            images=[AdminImage.from_record(i, public_base_url) for i in p.images],
         )
 
 

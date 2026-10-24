@@ -434,6 +434,53 @@ class SqlProductRepository:
         variant = await self._s.scalar(stmt)
         return None if variant is None else _variant(variant)
 
+    async def add_image(
+        self,
+        product_id: uuid.UUID,
+        *,
+        storage_key: str,
+        width: int,
+        height: int,
+        alt: str,
+        color_code: str | None,
+        position: int,
+        credit_author: str | None,
+        credit_source_url: str | None,
+        license: str | None,
+    ) -> ImageRecord:
+        image = ProductImage(
+            id=uuid.uuid7(),
+            product_id=product_id,
+            storage_key=storage_key,
+            width=width,
+            height=height,
+            alt=alt,
+            color_code=color_code,
+            position=position,
+            credit_author=credit_author,
+            credit_source_url=credit_source_url,
+            license=license,
+        )
+        self._s.add(image)
+        await self._s.flush()
+        return _image(image)
+
+    async def get_image(self, image_id: uuid.UUID) -> ImageRecord | None:
+        stmt = select(ProductImage).where(ProductImage.id == image_id).execution_options(**_FRESH)
+        image = await self._s.scalar(stmt)
+        return None if image is None else _image(image)
+
+    async def update_image(self, image_id: uuid.UUID, fields: dict[str, Any]) -> None:
+        await self._s.execute(
+            update(ProductImage).where(ProductImage.id == image_id).values(**fields)
+        )
+
+    async def delete_image(self, image_id: uuid.UUID) -> bool:
+        result = await self._s.execute(
+            delete(ProductImage).where(ProductImage.id == image_id).returning(ProductImage.id)
+        )
+        return result.first() is not None
+
     async def update_variant_versioned(
         self, variant_id: uuid.UUID, expected_version: int, fields: dict[str, Any]
     ) -> bool:

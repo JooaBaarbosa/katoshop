@@ -8,6 +8,8 @@ from catalog.application.cursor import decode_cursor, encode_cursor, invalid_cur
 from catalog.application.ports import (
     CategoryRecord,
     CollectionRecord,
+    ImageRecord,
+    ImageStorage,
     MovementCursor,
     MovementRecord,
     Overview,
@@ -20,6 +22,7 @@ from catalog.application.ports import (
     UnitOfWorkFactory,
     VariantRecord,
 )
+from catalog.domain.images import storage_key
 from catalog.domain.publishing import PublishCheck, publish_blockers
 from catalog.domain.slugs import slugify
 from catalog.domain.stock import StockError, apply_adjustment, effective_price
@@ -43,6 +46,8 @@ VARIANT_VERSION_CONFLICT = "catalog.variant.version_conflict"
 VARIANT_UNKNOWN_OPTION = "catalog.variant.unknown_option"
 CATEGORY_PARENT_CYCLE = "catalog.category.parent_cycle"
 SETTINGS_NOT_FOUND = "catalog.storefront.settings_not_found"
+IMAGE_NOT_FOUND = "catalog.image.not_found"
+IMAGE_UNKNOWN_COLOR = "catalog.image.unknown_color"
 
 RECENT_MOVEMENTS = 10
 
@@ -96,8 +101,9 @@ def decode_movement_cursor(token: str) -> MovementCursor:
 
 
 class AdminCatalogService:
-    def __init__(self, uow: UnitOfWorkFactory) -> None:
+    def __init__(self, uow: UnitOfWorkFactory, storage: ImageStorage) -> None:
         self._uow = uow
+        self._storage = storage
 
     # ------------------------------------------------------------------------ categorias
 
@@ -319,6 +325,72 @@ class AdminCatalogService:
             assert variant is not None  # noqa: S101
             await uow.products.recompute_min_price(variant.product_id)
             return variant
+
+    # ------------------------------------------------------------------------ imagens
+
+    async def add_image(
+        self,
+        product_id: uuid.UUID,
+        *,
+        data: bytes,
+        ext: str,
+        width: int,
+        height: int,
+        alt: str,
+        color_code: str | None,
+        credit_author: str | None,
+        credit_source_url: str | None,
+        license: str | None,  # noqa: A002
+    ) -> tuple[ImageRecord, bool]:
+        """Grava o arquivo e a linha. Devolve (imagem, criada); bytes repetidos no mesmo
+        produto devolvem a imagem existente sem tocar em nada."""
+        key = storage_key(data, ext)
+        async with self._uow() as uow:
+            # Trava o produto: dois uploads iguais simultâneos não duplicam a linha.
+            product = await uow.products.get(product_id, for_update=True)
+            if product is None:
+                raise CatalogError(PRODUCT_NOT_FOUND)
+            existing = next((i for i in product.images if i.storage_key == key), None)
+            if existing is not None:
+                return existing, False
+            await self._check_image_color(uow.products, color_code)
+            await self._storage.save(key, data)
+            position = max((i.position for i in product.images), default=-1) + 1
+            image = await uow.products.add_image(
+                product_id,
+                storage_key=key,
+                width=width,
+                height=height,
+                alt=alt,
+                color_code=color_code,
+                position=position,
+                credit_author=credit_author,
+                credit_source_url=credit_source_url,
+                license=license,
+            )
+            return image, True
+
+    async def update_image(self, image_id: uuid.UUID, fields: dict[str, Any]) -> ImageRecord:
+        async with self._uow() as uow:
+            if await uow.products.get_image(image_id) is None:
+                raise CatalogError(IMAGE_NOT_FOUND)
+            await self._check_image_color(uow.products, fields.get("color_code"))
+            if fields:
+                await uow.products.update_image(image_id, fields)
+            image = await uow.products.get_image(image_id)
+            assert image is not None  # noqa: S101
+            return image
+
+    async def delete_image(self, image_id: uuid.UUID) -> None:
+        """Remove só a linha: o arquivo é endereçado por conteúdo e pode servir a outra linha."""
+        async with self._uow() as uow:
+            if not await uow.products.delete_image(image_id):
+                raise CatalogError(IMAGE_NOT_FOUND)
+
+    @staticmethod
+    async def _check_image_color(products: ProductRepository, color_code: str | None) -> None:
+        if color_code is not None and color_code not in await products.known_colors([color_code]):
+            raise CatalogError(IMAGE_UNKNOWN_COLOR)
 
     async def publish(self, product_id: uuid.UUID) -> ProductRecord:
         async with self._uow() as uow:

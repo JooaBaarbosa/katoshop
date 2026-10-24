@@ -23,6 +23,8 @@ _STATUS: dict[str, tuple[int, str]] = {
     codes.VARIANT_UNKNOWN_OPTION: (422, "Cor ou tamanho inexistente"),
     codes.CATEGORY_PARENT_CYCLE: (422, "Categoria não pode descender de si mesma"),
     codes.SETTINGS_NOT_FOUND: (404, "Configurações da vitrine ainda não definidas"),
+    codes.IMAGE_NOT_FOUND: (404, "Imagem não encontrada"),
+    codes.IMAGE_UNKNOWN_COLOR: (422, "Cor inexistente"),
     "catalog.stock.invalid_reason": (422, "Motivo de ajuste inválido"),
     "catalog.stock.zero_delta": (422, "Ajuste sem quantidade"),
     "catalog.stock.would_go_negative": (422, "Estoque ficaria negativo"),

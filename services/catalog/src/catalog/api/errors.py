@@ -21,7 +21,7 @@ _STATUS: dict[str, tuple[int, str]] = {
     codes.VARIANT_NOT_FOUND: (404, "Variante não encontrada"),
     codes.VARIANT_VERSION_CONFLICT: (409, "Variante alterada por outra pessoa"),
     codes.VARIANT_UNKNOWN_OPTION: (422, "Cor ou tamanho inexistente"),
-    codes.INVALID_CURSOR: (422, "Cursor de paginação inválido"),
+    codes.CATEGORY_PARENT_CYCLE: (422, "Categoria não pode descender de si mesma"),
     codes.SETTINGS_NOT_FOUND: (404, "Configurações da vitrine ainda não definidas"),
     "catalog.stock.invalid_reason": (422, "Motivo de ajuste inválido"),
     "catalog.stock.zero_delta": (422, "Ajuste sem quantidade"),

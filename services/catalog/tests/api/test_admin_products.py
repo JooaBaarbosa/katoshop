@@ -1,3 +1,5 @@
+import base64
+import json
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -313,8 +315,24 @@ async def test_list_products_filters_and_cursor(
     assert by_status.json()["items"] == []
 
 
+def b64_json(value: object) -> str:
+    return base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=").decode()
+
+
+# Base64url válido com JSON bem formado, mas fora do formato do cursor.
+WELL_FORMED_BAD_CURSORS = [
+    {"u": "2026-10-24T00:00:00+00:00", "i": 5},
+    {"u": 1729728000, "i": "0190f0f0-0000-7000-8000-000000000000"},
+    {"u": "2026-10-24T00:00:00", "i": "0190f0f0-0000-7000-8000-000000000000"},
+    {"u": "2026-10-24T00:00:00+00:00", "i": "nao-e-uuid"},
+    ["2026-10-24T00:00:00+00:00", "0190f0f0-0000-7000-8000-000000000000"],
+    None,
+]
+
+
 async def test_list_products_invalid_cursor_422(admin_client: httpx.AsyncClient) -> None:
-    for cursor in ["nao-e-base64!!", "eyJ4IjogMX0", "e30"]:
+    malformed = ["nao-e-base64!!", "eyJ4IjogMX0", "e30", "_w"]
+    for cursor in malformed + [b64_json(v) for v in WELL_FORMED_BAD_CURSORS]:
         response = await admin_client.get("/v1/admin/products", params={"cursor": cursor})
         assert response.status_code == 422, cursor
         assert response.json()["code"] == "catalog.pagination.invalid_cursor"

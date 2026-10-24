@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import json
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -9,6 +11,10 @@ from sqlalchemy import text
 
 type Json = dict[str, Any]
 type Factory = Callable[..., Awaitable[Json]]
+
+
+def _b64_json(value: object) -> str:
+    return base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=").decode()
 
 
 async def _movement_count(app: FastAPI, variant_id: str) -> int:
@@ -129,9 +135,19 @@ async def test_stock_movements_newest_first_with_cursor(
     assert [m["delta"] for m in page2["items"]] == [10]
     assert page2["next_cursor"] is None
 
-    bad = await admin_client.get(movements_url, params={"cursor": "lixo"})
-    assert bad.status_code == 422
-    assert bad.json()["code"] == "catalog.pagination.invalid_cursor"
+    product_style = _b64_json({"u": "2026-10-24T00:00:00+00:00", "i": str(uuid.uuid7())})
+    bad_cursors = [
+        "lixo",
+        product_style,
+        _b64_json({"c": "2026-10-24T00:00:00+00:00", "i": 5}),
+        _b64_json({"c": 1729728000, "i": str(uuid.uuid7())}),
+        _b64_json(["2026-10-24T00:00:00+00:00", str(uuid.uuid7())]),
+        _b64_json(None),
+    ]
+    for cursor in bad_cursors:
+        bad = await admin_client.get(movements_url, params={"cursor": cursor})
+        assert bad.status_code == 422, cursor
+        assert bad.json()["code"] == "catalog.pagination.invalid_cursor"
 
 
 async def test_overview(admin_client: httpx.AsyncClient, make_variant: Factory) -> None:

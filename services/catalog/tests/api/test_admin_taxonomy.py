@@ -87,6 +87,37 @@ async def test_category_rename_updates_product_name_cache(
     assert cache == "Agasalhos"
 
 
+async def _set_parent(client: httpx.AsyncClient, category: Json, parent: Json) -> httpx.Response:
+    return await client.patch(
+        f"/v1/admin/categories/{category['id']}", json={"parent_id": parent["id"]}
+    )
+
+
+async def test_category_parent_cycle_422(
+    admin_client: httpx.AsyncClient, make_category: Factory
+) -> None:
+    a, b, c = await make_category("A"), await make_category("B"), await make_category("C")
+
+    itself = await _set_parent(admin_client, a, a)
+    assert itself.status_code == 422
+    assert itself.json()["code"] == "catalog.category.parent_cycle"
+
+    assert (await _set_parent(admin_client, b, a)).status_code == 200  # B sob A
+    two_levels = await _set_parent(admin_client, a, b)  # A sob B fecharia A -> B -> A
+    assert two_levels.status_code == 422
+    assert two_levels.json()["code"] == "catalog.category.parent_cycle"
+
+    assert (await _set_parent(admin_client, c, b)).status_code == 200  # C sob B sob A
+    three_levels = await _set_parent(admin_client, a, c)  # A -> C -> B -> A
+    assert three_levels.status_code == 422
+    assert three_levels.json()["code"] == "catalog.category.parent_cycle"
+
+    listed = {x["id"]: x for x in (await admin_client.get("/v1/admin/categories")).json()["items"]}
+    assert listed[a["id"]]["parent_id"] is None
+    assert listed[b["id"]]["parent_id"] == a["id"]
+    assert listed[c["id"]]["parent_id"] == b["id"]
+
+
 async def test_collection_crud_and_product_order(
     admin_client: httpx.AsyncClient, make_product: Factory, uniq: Callable[[str], str]
 ) -> None:

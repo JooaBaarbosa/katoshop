@@ -1,12 +1,10 @@
 """Casos de uso do admin do catálogo. Cada método roda numa transação própria."""
 
-import base64
-import binascii
-import json
 import uuid
 from datetime import datetime
 from typing import Any
 
+from catalog.application.cursor import decode_cursor, encode_cursor, invalid_cursor
 from catalog.application.ports import (
     CategoryRecord,
     CollectionRecord,
@@ -18,6 +16,7 @@ from catalog.application.ports import (
     ProductRecord,
     ProductRepository,
     ProductRow,
+    TaxonomyRepository,
     UnitOfWorkFactory,
     VariantRecord,
 )
@@ -42,7 +41,7 @@ PRODUCT_NOT_PUBLISHABLE = "catalog.product.not_publishable"
 VARIANT_NOT_FOUND = "catalog.variant.not_found"
 VARIANT_VERSION_CONFLICT = "catalog.variant.version_conflict"
 VARIANT_UNKNOWN_OPTION = "catalog.variant.unknown_option"
-INVALID_CURSOR = "catalog.pagination.invalid_cursor"
+CATEGORY_PARENT_CYCLE = "catalog.category.parent_cycle"
 SETTINGS_NOT_FOUND = "catalog.storefront.settings_not_found"
 
 RECENT_MOVEMENTS = 10
@@ -65,41 +64,34 @@ def _slug_or_error(name: str, code: str) -> str:
 # ---------------------------------------------------------------------------- cursores
 
 
-def _encode_cursor(payload: dict[str, str]) -> str:
-    raw = json.dumps(payload, separators=(",", ":")).encode()
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
-
-
-def _decode_cursor(token: str, keys: tuple[str, str]) -> tuple[datetime, uuid.UUID]:
-    """Decodifica `{keys[0]: datetime ISO com fuso, keys[1]: uuid}`; qualquer desvio é 422."""
+def _parse_position(payload: dict[str, str], keys: tuple[str, str]) -> tuple[datetime, uuid.UUID]:
     try:
-        raw = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))
-        data = json.loads(raw)
-        if not isinstance(data, dict) or set(data) != set(keys):  # pyright: ignore[reportUnknownArgumentType]
-            raise ValueError("chaves inesperadas")
-        moment = datetime.fromisoformat(data[keys[0]])
-        if moment.tzinfo is None:
-            raise ValueError("sem fuso")
-        return moment, uuid.UUID(data[keys[1]])
-    except (binascii.Error, ValueError, TypeError, UnicodeDecodeError) as exc:
-        raise CatalogError(INVALID_CURSOR) from exc
+        moment = datetime.fromisoformat(payload[keys[0]])
+        row_id = uuid.UUID(payload[keys[1]])
+    except ValueError as exc:
+        raise invalid_cursor() from exc
+    if moment.tzinfo is None:
+        raise invalid_cursor()
+    return moment, row_id
 
 
 def encode_product_cursor(row: ProductRow) -> str:
-    return _encode_cursor({"u": row.updated_at.isoformat(), "i": str(row.id)})
+    return encode_cursor({"u": row.updated_at.isoformat(), "i": str(row.id)})
 
 
 def decode_product_cursor(token: str) -> ProductCursor:
-    updated_at, row_id = _decode_cursor(token, ("u", "i"))
+    keys = ("u", "i")
+    updated_at, row_id = _parse_position(decode_cursor(token, keys), keys)
     return ProductCursor(updated_at, row_id)
 
 
 def encode_movement_cursor(movement: MovementRecord) -> str:
-    return _encode_cursor({"c": movement.created_at.isoformat(), "i": str(movement.id)})
+    return encode_cursor({"c": movement.created_at.isoformat(), "i": str(movement.id)})
 
 
 def decode_movement_cursor(token: str) -> MovementCursor:
-    created_at, row_id = _decode_cursor(token, ("c", "i"))
+    keys = ("c", "i")
+    created_at, row_id = _parse_position(decode_cursor(token, keys), keys)
     return MovementCursor(created_at, row_id)
 
 
@@ -134,16 +126,30 @@ class AdminCatalogService:
             if slug and await uow.taxonomy.category_slug_exists(slug, exclude=category_id):
                 raise CatalogError(CATEGORY_SLUG_TAKEN)
             parent_id = fields.get("parent_id")
-            if parent_id is not None and (
-                parent_id == category_id or await uow.taxonomy.get_category(parent_id) is None
-            ):
-                raise CatalogError(CATEGORY_NOT_FOUND)
+            if parent_id is not None:
+                await self._check_parent(uow.taxonomy, category_id, parent_id)
             await uow.taxonomy.update_category(category_id, fields)
             if "name" in fields:
                 await uow.products.refresh_category_cache(category_id, fields["name"])
             category = await uow.taxonomy.get_category(category_id)
             assert category is not None  # noqa: S101
             return category
+
+    @staticmethod
+    async def _check_parent(
+        taxonomy: TaxonomyRepository, category_id: uuid.UUID, parent_id: uuid.UUID
+    ) -> None:
+        """O novo pai deve existir e não pode ser a própria categoria nem um descendente dela."""
+        if await taxonomy.get_category(parent_id) is None:
+            raise CatalogError(CATEGORY_NOT_FOUND)
+        seen: set[uuid.UUID] = set()
+        current: uuid.UUID | None = parent_id
+        while current is not None and current not in seen:
+            if current == category_id:
+                raise CatalogError(CATEGORY_PARENT_CYCLE)
+            seen.add(current)
+            ancestor = await taxonomy.get_category(current)
+            current = None if ancestor is None else ancestor.parent_id
 
     async def delete_category(self, category_id: uuid.UUID) -> None:
         async with self._uow() as uow:

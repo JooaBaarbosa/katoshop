@@ -220,9 +220,12 @@ async def update_variant(
 _READ_CHUNK = 64 * 1024
 # Folga para o envelope multipart (nomes de campos, limites) acima dos bytes do arquivo.
 _MULTIPART_OVERHEAD = 1024 * 1024
-_UNSUPPORTED = ProblemError(
-    415, "catalog.image.unsupported_type", "Envie uma imagem JPEG, PNG ou WebP válida"
-)
+
+
+def _unsupported() -> ProblemError:
+    return ProblemError(
+        415, "catalog.image.unsupported_type", "Envie uma imagem JPEG, PNG ou WebP válida"
+    )
 
 
 def _too_large() -> ProblemError:
@@ -234,7 +237,7 @@ async def _read_limited(file: UploadFile) -> tuple[bytes, str]:
     head = await file.read(12)
     ext = detect_image_type(head)
     if ext is None:
-        raise _UNSUPPORTED
+        raise _unsupported()
     chunks = [head]
     total = len(head)
     while total <= MAX_IMAGE_BYTES:
@@ -253,7 +256,35 @@ def _text(value: object) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
 
 
-@router.post("/products/{product_id}/images", status_code=201)
+_UPLOAD_BODY: dict[str, Any] = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "required": ["file", "alt"],
+                    "properties": {
+                        "file": {"type": "string", "format": "binary"},
+                        "alt": {"type": "string", "minLength": 1, "maxLength": 300},
+                        "color_code": {"type": "string"},
+                        "credit_author": {"type": "string"},
+                        "credit_source_url": {"type": "string", "format": "uri"},
+                        "license": {"type": "string"},
+                    },
+                }
+            }
+        },
+    }
+}
+
+
+@router.post(
+    "/products/{product_id}/images",
+    status_code=201,
+    openapi_extra=_UPLOAD_BODY,
+    responses={200: {"model": AdminImage, "description": "imagem já existente"}},
+)
 async def upload_image(
     product_id: uuid.UUID,
     request: Request,
@@ -302,7 +333,7 @@ async def upload_image(
     try:
         width, height = await asyncio.to_thread(probe_image, data)
     except InvalidImageError as exc:
-        raise _UNSUPPORTED from exc
+        raise _unsupported() from exc
     image, created = await mapped(
         service.add_image(
             product_id,

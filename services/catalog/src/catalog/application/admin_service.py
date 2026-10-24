@@ -352,6 +352,8 @@ class AdminCatalogService:
                 raise CatalogError(PRODUCT_NOT_FOUND)
             existing = next((i for i in product.images if i.storage_key == key), None)
             if existing is not None:
+                # Regrava o arquivo (idempotente): refaz o volume de mídia se ele foi recriado.
+                await self._storage.save(key, data)
                 return existing, False
             await self._check_image_color(uow.products, color_code)
             await self._storage.save(key, data)

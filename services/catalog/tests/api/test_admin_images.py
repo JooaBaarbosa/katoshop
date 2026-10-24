@@ -251,3 +251,25 @@ async def test_upload_decompression_bomb_415(
     response = await upload(admin_client, product["id"], buffer.getvalue())
     assert response.status_code == 415
     assert response.json()["code"] == "catalog.image.unsupported_type"
+
+
+async def test_reupload_restores_missing_file(
+    admin_client: httpx.AsyncClient, make_product: MakeProduct, settings: CatalogSettings
+) -> None:
+    product = await make_product()
+    data = image_bytes()
+    first = (await upload(admin_client, product["id"], data)).json()
+    path = settings.media_root / first["storage_key"]
+    path.unlink()
+    again = await upload(admin_client, product["id"], data)
+    assert again.status_code == 200
+    assert again.json()["id"] == first["id"]
+    assert path.read_bytes() == data
+
+
+async def test_openapi_declares_multipart_upload(app: Any) -> None:
+    post = app.openapi()["paths"]["/v1/admin/products/{product_id}/images"]["post"]
+    schema = post["requestBody"]["content"]["multipart/form-data"]["schema"]
+    assert {"file", "alt"} <= set(schema["required"])
+    assert {"file", "alt", "color_code", "license"} <= set(schema["properties"])
+    assert "200" in post["responses"]

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from catalog.domain.images import STORAGE_KEY_RE
 
 # Só caminhos internos: uma barra, sem "//" nem barra invertida (evita open redirect).
-INTERNAL_PATH_RE = r"^/([^/\\][^\\]*)?$"
+INTERNAL_PATH_RE = r"^/([^/\\\x00-\x20\x7f][^\\\x00-\x20\x7f]*)?$"
 
 
 class Hero(BaseModel):

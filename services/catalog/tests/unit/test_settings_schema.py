@@ -56,7 +56,22 @@ def test_rejects_bad_image_key_and_too_many_collections():
         StorefrontSettings.model_validate(d)
 
 
-@pytest.mark.parametrize("bad", ["//evil.com/x", "/\\evil.com", "/a\\b", "https://x", "x"])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "//evil.com/x",
+        "/\\evil.com",
+        "/a\\b",
+        "https://x",
+        "x",
+        "/\t/x",
+        "/\n/x",
+        "/ /x",
+        "/a b",
+        "/\x00x",
+        "/a\x7fb",
+    ],
+)
 @pytest.mark.parametrize("field", ["hero", "secondary_cta"])
 def test_rejects_non_internal_hrefs(field, bad):
     d = _valid()

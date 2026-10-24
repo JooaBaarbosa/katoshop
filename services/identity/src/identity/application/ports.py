@@ -40,7 +40,9 @@ class Transactional(Protocol):
 class UserRepository(Transactional, Protocol):
     async def get_by_email(self, email: str, *, for_update: bool = False) -> UserRecord | None: ...
 
-    async def get_by_id(self, user_id: uuid.UUID) -> UserRecord | None: ...
+    async def get_by_id(
+        self, user_id: uuid.UUID, *, for_update: bool = False
+    ) -> UserRecord | None: ...
 
     async def add(self, email: str, password_hash: str, name: str, kind: str) -> UserRecord | None:
         """Insere o usuário; devolve None se o email (case-insensitive) já existe."""

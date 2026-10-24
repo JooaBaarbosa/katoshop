@@ -1,5 +1,7 @@
 import httpx
 
+from identity.domain.lockout import MAX_FAILURES
+
 from .conftest import PASSWORD, register
 
 NEW_PASSWORD = "Nova-Senha-Forte-77"  # noqa: S105 (senha de teste)
@@ -90,3 +92,28 @@ async def test_patch_me_email_requires_current_and_detects_conflict(
 async def test_patch_me_requires_token(client: httpx.AsyncClient) -> None:
     response = await client.patch("/v1/me", json={"name": "X"})
     assert response.status_code == 401
+
+
+async def test_patch_me_wrong_current_password_counts_toward_lockout(
+    client: httpx.AsyncClient,
+) -> None:
+    pair = await register(client)
+    for _ in range(MAX_FAILURES):
+        wrong = await client.patch(
+            "/v1/me",
+            json={"new_password": NEW_PASSWORD, "current_password": "errada-123"},
+            headers=_auth(pair),
+        )
+        assert wrong.status_code == 401
+
+    correct = await client.patch(
+        "/v1/me",
+        json={"new_password": NEW_PASSWORD, "current_password": PASSWORD},
+        headers=_auth(pair),
+    )
+    assert correct.status_code == 401
+    assert correct.json()["code"] == "identity.auth.invalid_credentials"
+    login = await client.post(
+        "/v1/auth/login", json={"email": "ana@example.com", "password": PASSWORD}
+    )
+    assert login.status_code == 401

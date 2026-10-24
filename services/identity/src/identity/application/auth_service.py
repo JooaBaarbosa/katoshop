@@ -170,32 +170,55 @@ class AuthService:
     ) -> UserRecord:
         email = None if email is None else _normalize_email(email)
         async with self._users.transaction():
-            user = await self._users.get_by_id(user_id)
-            if user is None or user.status != "active":
-                raise AuthError(INVALID_CREDENTIALS)
-            new_hash: str | None = None
-            changes_credentials = new_password is not None or (
-                email is not None and email != user.email
+            result = await self._update_profile(
+                user_id, name, email, new_password, current_password
             )
-            if changes_credentials:
-                if not current_password:
-                    raise AuthError(CURRENT_PASSWORD_REQUIRED)
-                if not await asyncio.to_thread(
-                    verify_password, user.password_hash, current_password
-                ):
-                    raise AuthError(INVALID_CREDENTIALS)
-            if new_password is not None:
-                violations = validate_password(new_password, email or user.email)
-                if violations:
-                    raise AuthError(WEAK_PASSWORD, violations)
-                new_hash = await asyncio.to_thread(hash_password, new_password)
-            if not await self._users.update_profile(
-                user_id, name=name, email=email, password_hash=new_hash
-            ):
-                raise AuthError(EMAIL_TAKEN)
-            updated = await self._users.get_by_id(user_id)
-            assert updated is not None  # noqa: S101
-            return updated
+        if isinstance(result, AuthError):
+            raise result  # depois do commit: o contador de falhas persiste
+        return result
+
+    async def _update_profile(
+        self,
+        user_id: uuid.UUID,
+        name: str | None,
+        email: str | None,
+        new_password: str | None,
+        current_password: str | None,
+    ) -> UserRecord | AuthError:
+        now = self._clock()
+        user = await self._users.get_by_id(user_id, for_update=True)
+        if user is None or user.status != "active":
+            return AuthError(INVALID_CREDENTIALS)
+        new_hash: str | None = None
+        changes_credentials = new_password is not None or (
+            email is not None and email != user.email
+        )
+        if changes_credentials:
+            if not current_password:
+                raise AuthError(CURRENT_PASSWORD_REQUIRED)
+            # mesma regra de bloqueio do login; verifica o hash mesmo bloqueada (tempo igual)
+            password_ok = await asyncio.to_thread(
+                verify_password, user.password_hash, current_password
+            )
+            if is_locked(user.login_state, now):
+                return AuthError(INVALID_CREDENTIALS)
+            if not password_ok:
+                await self._users.save_login_state(user_id, register_failure(user.login_state, now))
+                return AuthError(INVALID_CREDENTIALS)
+            if user.login_state != register_success(user.login_state):
+                await self._users.save_login_state(user_id, register_success(user.login_state))
+        if new_password is not None:
+            violations = validate_password(new_password, email or user.email)
+            if violations:
+                raise AuthError(WEAK_PASSWORD, violations)
+            new_hash = await asyncio.to_thread(hash_password, new_password)
+        if not await self._users.update_profile(
+            user_id, name=name, email=email, password_hash=new_hash
+        ):
+            raise AuthError(EMAIL_TAKEN)
+        updated = await self._users.get_by_id(user_id)
+        assert updated is not None  # noqa: S101
+        return updated
 
     async def create_staff(self, email: str, password: str, name: str, role: str = "admin") -> None:
         email = _normalize_email(email)

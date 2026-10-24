@@ -80,8 +80,10 @@ class SqlUserRepository:
         user = await self._scope.session.scalar(stmt)
         return None if user is None else await self._record(user)
 
-    async def get_by_id(self, user_id: uuid.UUID) -> UserRecord | None:
-        user = await self._scope.session.get(User, user_id)
+    async def get_by_id(self, user_id: uuid.UUID, *, for_update: bool = False) -> UserRecord | None:
+        user = await self._scope.session.get(
+            User, user_id, with_for_update=for_update, populate_existing=for_update
+        )
         return None if user is None else await self._record(user)
 
     async def add(self, email: str, password_hash: str, name: str, kind: str) -> UserRecord | None:

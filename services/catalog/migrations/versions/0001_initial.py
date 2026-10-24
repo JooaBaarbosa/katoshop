@@ -1,4 +1,4 @@
-"""tabelas iniciais do catalog, busca em portuguÃªs e dados de referÃªncia
+"""tabelas iniciais do catalog, busca em português e dados de referência
 
 Revision ID: 0001
 Revises:
@@ -42,9 +42,9 @@ def _uuid_pk() -> sa.Column:
 
 def upgrade() -> None:
     now = sa.text("now()")
-    # Idempotente: o init do Postgres no compose tambÃ©m cria a extensÃ£o.
+    # Idempotente: o init do Postgres no compose também cria a extensão.
     op.execute("CREATE EXTENSION IF NOT EXISTS unaccent")
-    # unaccent() Ã© STABLE; o wrapper IMMUTABLE Ã© necessÃ¡rio para coluna gerada e Ã­ndice.
+    # unaccent() é STABLE; o wrapper IMMUTABLE é necessário para coluna gerada e índice.
     op.execute(
         "CREATE OR REPLACE FUNCTION public.immutable_unaccent(text) RETURNS text "
         "LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT "

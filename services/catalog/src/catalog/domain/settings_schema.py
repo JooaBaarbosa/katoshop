@@ -2,18 +2,21 @@ from pydantic import BaseModel, Field
 
 from catalog.domain.images import STORAGE_KEY_RE
 
+# Só caminhos internos: uma barra, sem "//" nem barra invertida (evita open redirect).
+INTERNAL_PATH_RE = r"^/(?![/\\])[^\\]*$"
+
 
 class Hero(BaseModel):
     title: str = Field(min_length=1, max_length=80)
     subtitle: str = Field(min_length=1, max_length=200)
     cta_label: str = Field(min_length=1, max_length=30)
-    cta_href: str = Field(pattern=r"^/")
+    cta_href: str = Field(pattern=INTERNAL_PATH_RE)
     image_key: str = Field(pattern=STORAGE_KEY_RE)
 
 
 class Cta(BaseModel):
     label: str = Field(min_length=1, max_length=30)
-    href: str = Field(pattern=r"^/")
+    href: str = Field(pattern=INTERNAL_PATH_RE)
 
 
 class Policies(BaseModel):

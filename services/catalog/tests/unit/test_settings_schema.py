@@ -54,3 +54,20 @@ def test_rejects_bad_image_key_and_too_many_collections():
     d["featured_collection_slugs"] = ["a", "b", "c", "d"]
     with pytest.raises(ValidationError):
         StorefrontSettings.model_validate(d)
+
+
+@pytest.mark.parametrize("bad", ["//evil.com/x", "/\\evil.com", "/a\\b", "https://x", "x"])
+@pytest.mark.parametrize("field", ["hero", "secondary_cta"])
+def test_rejects_non_internal_hrefs(field, bad):
+    d = _valid()
+    d[field]["cta_href" if field == "hero" else "href"] = bad
+    with pytest.raises(ValidationError):
+        StorefrontSettings.model_validate(d)
+
+
+@pytest.mark.parametrize("good", ["/", "/busca", "/colecoes/drop-inverno-26"])
+@pytest.mark.parametrize("field", ["hero", "secondary_cta"])
+def test_accepts_internal_hrefs(field, good):
+    d = _valid()
+    d[field]["cta_href" if field == "hero" else "href"] = good
+    StorefrontSettings.model_validate(d)

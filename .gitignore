@@ -10,3 +10,5 @@ test-results/
 playwright-report/
 .lighthouseci/
 media-data/
+.coverage
+htmlcov/

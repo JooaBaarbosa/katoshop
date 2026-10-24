@@ -4,6 +4,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from catalog.adapters.repositories import sql_unit_of_work
+from catalog.api.routes_admin import router as admin_router
+from catalog.application.admin_service import AdminCatalogService
 from catalog.settings import CatalogSettings
 from ks_platform.auth import JwksKeyProvider, TokenVerifier
 from ks_platform.db import make_engine, make_session_factory
@@ -34,9 +37,11 @@ def create_app(settings: CatalogSettings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.session_factory = session_factory
     app.state.token_verifier = TokenVerifier(JwksKeyProvider(settings.jwks_url))
+    app.state.admin_service = AdminCatalogService(sql_unit_of_work(session_factory))
     install_problem_handlers(app)
     configure_observability(app, settings, engine)
     app.include_router(health_router(ready_check))
+    app.include_router(admin_router)
     return app
 
 

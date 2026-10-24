@@ -1,0 +1,32 @@
+name: ci-catalog
+
+on:
+  push:
+    paths:
+      - services/catalog/**
+      - libs/py/platform/**
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/ci-catalog.yml
+  pull_request:
+    paths:
+      - services/catalog/**
+      - libs/py/platform/**
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/ci-catalog.yml
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: 0.13.5
+          python-version: "3.15.1"
+      - run: uv sync --all-packages --all-groups
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright services/catalog
+      - run: uv run pytest services/catalog -q

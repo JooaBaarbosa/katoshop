@@ -1,0 +1,27 @@
+@import "./tokens.css";
+
+/* Admin: conteúdo claro, barra lateral escura. */
+@source "../components";
+
+@layer base {
+  html {
+    background-color: var(--color-admin-bg);
+    color: var(--color-bg);
+    font-family: var(--font-sans);
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+  }
+  *,
+  ::before,
+  ::after {
+    border-color: #deded8;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent-on-light);
+    outline-offset: 2px;
+  }
+}

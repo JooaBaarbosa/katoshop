@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* Identidade SARJETA (spec seção 6). Raio de 2px, nunca pílula. */
+@theme {
+  --color-bg: #0e0e0e;
+  --color-surface: #1e1e1e;
+  --color-border: #2a2a2a;
+  --color-fg: #f4f4f0;
+  --color-muted: #a9a9a4;
+  --color-accent: #d7ff3a;
+  --color-accent-on-light: #9dbf00;
+  --color-admin-bg: #f7f7f4;
+  --color-admin-sidebar: #0e0e0e;
+
+  --radius: 2px;
+  --duration-fast: 150ms;
+}
+
+/*
+ * As variáveis --font-display, --font-sans e --font-mono vêm do next/font (fonts.ts).
+ * Declarar o mesmo nome em @theme criaria uma referência circular, então a família
+ * de exibição entra como utilitário.
+ */
+@utility font-display {
+  font-family: var(--font-display), "Anton", "Impact", sans-serif;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

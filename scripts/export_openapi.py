@@ -12,11 +12,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from catalog.main import create_app as create_catalog_app
-from catalog.settings import CatalogSettings
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import FastAPI
+
+from catalog.main import create_app as create_catalog_app
+from catalog.settings import CatalogSettings
 from identity.main import create_app as create_identity_app
 from identity.settings import IdentitySettings
 
@@ -38,6 +39,7 @@ def build_identity(workdir: Path) -> FastAPI:
     )
     return create_identity_app(
         IdentitySettings(
+            _env_file=None,  # pyright: ignore[reportCallIssue]
             database_url=DUMMY_DATABASE_URL,
             jwks_url=DUMMY_JWKS_URL,
             signing_key_path=key_path,
@@ -48,6 +50,7 @@ def build_identity(workdir: Path) -> FastAPI:
 def build_catalog(workdir: Path) -> FastAPI:
     return create_catalog_app(
         CatalogSettings(
+            _env_file=None,  # pyright: ignore[reportCallIssue]
             database_url=DUMMY_DATABASE_URL,
             jwks_url=DUMMY_JWKS_URL,
             media_root=workdir / "media",

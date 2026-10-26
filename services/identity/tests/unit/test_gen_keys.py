@@ -1,4 +1,5 @@
 import importlib.util
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -58,3 +59,19 @@ def test_force_regenerates_key_but_keeps_env(root: Path) -> None:
 
     assert pem.read_bytes() != first
     assert (root / ".env").read_text(encoding="utf-8") == "CUSTOM=1\n"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="permissões POSIX")
+def test_key_readable_by_container_user_and_dir_private(root: Path) -> None:
+    gen = _load()
+    pem = root / "infra" / "secrets" / "identity-signing-key.pem"
+    gen.main([], root=root)
+    assert pem.stat().st_mode & 0o777 == 0o644
+    assert pem.parent.stat().st_mode & 0o777 == 0o700
+
+    # chave antiga gerada com 0600 é corrigida sem ser regenerada
+    pem.chmod(0o600)
+    first = pem.read_bytes()
+    gen.main([], root=root)
+    assert pem.stat().st_mode & 0o777 == 0o644
+    assert pem.read_bytes() == first

@@ -6,7 +6,7 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "dev:up": "uv run python scripts/gen_keys.py && docker compose up -d --build",
-    "dev:down": "docker compose down",
+    "dev:down": "docker compose --profile \"*\" down",
     "seed": "echo \"pendente\"",
     "gen:api": "echo \"pendente\"",
     "test:e2e": "echo \"pendente\"",

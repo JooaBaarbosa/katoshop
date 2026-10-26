@@ -2,8 +2,12 @@
 # removidos antes de chegar aos serviços.
 http:
   routers:
+    # Só endpoints de credencial (R15). Refresh e logout ficam de fora: os BFFs do Next
+    # saem pelo mesmo IP e esgotariam o balde renovando sessões no SSR.
     identity-auth:
-      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/identity/v1/auth`)"
+      rule: >-
+        Host(`api.katoshop.localhost`) && (Path(`/identity/v1/auth/login`)
+        || Path(`/identity/v1/auth/staff/login`) || Path(`/identity/v1/auth/register`))
       entryPoints: [web]
       middlewares: [auth-ratelimit, identity-strip]
       service: identity
@@ -32,7 +36,7 @@ http:
       stripPrefix:
         prefixes: ["/catalog"]
 
-    # Login, cadastro e refresh: 10 req/s em média, rajada de 20, por IP de origem.
+    # Login, login de staff e cadastro: 10 req/s em média, rajada de 20, por IP de origem.
     auth-ratelimit:
       rateLimit:
         average: 10

@@ -14,6 +14,12 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 KEY_RELATIVE_PATH = Path("infra") / "secrets" / "identity-signing-key.pem"
+# O compose monta a chave como secret de arquivo (bind mount): o container vê o dono e o
+# modo do host. O identity roda como usuário sem privilégio (uid 10001), que no Linux não é
+# o dono do arquivo; com 0600 ele não consegue ler. Por isso o arquivo fica 0644 e quem
+# protege a chave no host é a pasta infra/secrets/ (0700, fora do git).
+KEY_MODE = 0o644
+SECRETS_DIR_MODE = 0o700
 
 
 def main(argv: Sequence[str] | None = None, root: Path = REPO_ROOT) -> int:
@@ -32,8 +38,9 @@ def main(argv: Sequence[str] | None = None, root: Path = REPO_ROOT) -> int:
             serialization.NoEncryption(),
         )
         key_path.write_bytes(pem)
-        key_path.chmod(0o600)
         print(f"Chave gerada em {key_path}")
+    key_path.parent.chmod(SECRETS_DIR_MODE)
+    key_path.chmod(KEY_MODE)
 
     env_path = root / ".env"
     example_path = root / ".env.example"

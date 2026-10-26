@@ -115,7 +115,7 @@ describe("withAuth", () => {
     await session.setTokens(pair("1"));
     const fn = vi.fn((token: string) => Promise.resolve(`ok:${token}`));
 
-    expect(await session.withAuth(fn)).toBe("ok:at-1");
+    expect(await session.withAuth(fn, { refresh: true })).toBe("ok:at-1");
     expect(fn).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -126,7 +126,7 @@ describe("withAuth", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, pair("2")));
     const fn = vi.fn<Fn>().mockRejectedValueOnce(unauthorized()).mockResolvedValueOnce("depois");
 
-    expect(await session.withAuth(fn)).toBe("depois");
+    expect(await session.withAuth(fn, { refresh: true })).toBe("depois");
 
     expect(fn.mock.calls.map((c) => c[0])).toEqual(["at-1", "at-2"]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -144,7 +144,7 @@ describe("withAuth", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, pair("2")));
     const fn = vi.fn<Fn>().mockRejectedValue(unauthorized());
 
-    await expect(session.withAuth(fn)).rejects.toMatchObject({ status: 401 });
+    await expect(session.withAuth(fn, { refresh: true })).rejects.toMatchObject({ status: 401 });
     expect(fn).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -155,7 +155,7 @@ describe("withAuth", () => {
     const forbidden = new ApiProblem({ status: 403, code: "auth.forbidden", message: "no" });
     const fn = vi.fn<Fn>().mockRejectedValue(forbidden);
 
-    await expect(session.withAuth(fn)).rejects.toBe(forbidden);
+    await expect(session.withAuth(fn, { refresh: true })).rejects.toBe(forbidden);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -174,7 +174,7 @@ describe("withAuth", () => {
     );
     const fn = vi.fn<Fn>().mockRejectedValue(unauthorized());
 
-    const failure = await session.withAuth(fn).catch((e: unknown) => e);
+    const failure = await session.withAuth(fn, { refresh: true }).catch((e: unknown) => e);
     expect(failure).toBeInstanceOf(ApiProblem);
     expect((failure as ApiProblem).status).toBe(401);
     expect(fn).toHaveBeenCalledTimes(1);
@@ -182,14 +182,109 @@ describe("withAuth", () => {
     expect(store.values.has("ks_rt")).toBe(false);
   });
 
-  it("falha de rede no refresh também limpa os cookies e vira 401", async () => {
+  it("falha de rede no refresh não desloga: propaga o erro e mantém os cookies", async () => {
     const session = makeSession();
     await session.setTokens(pair("1"));
-    fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+    const networkError = new TypeError("fetch failed");
+    fetchMock.mockRejectedValueOnce(networkError);
+    const fn = vi.fn<Fn>().mockRejectedValue(unauthorized());
+
+    await expect(session.withAuth(fn, { refresh: true })).rejects.toBe(networkError);
+    expect(store.values.get("ks_at")).toBe("at-1");
+    expect(store.values.get("ks_rt")).toBe("rt-1");
+    expect(store.deleted).toEqual([]);
+  });
+
+  it("5xx no refresh propaga ApiProblem com o status real e mantém os cookies", async () => {
+    const session = makeSession();
+    await session.setTokens(pair("1"));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(503, { status: 503, detail: "down", code: "identity.unavailable" }),
+    );
+    const fn = vi.fn<Fn>().mockRejectedValue(unauthorized());
+
+    await expect(session.withAuth(fn, { refresh: true })).rejects.toMatchObject({ status: 503 });
+    expect(store.values.get("ks_rt")).toBe("rt-1");
+    expect(store.deleted).toEqual([]);
+  });
+
+  it("refresh recusado (4xx) vira 401 com cause e limpa os cookies", async () => {
+    const session = makeSession();
+    await session.setTokens(pair("1"));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(400, {
+        status: 400,
+        detail: "bad",
+        code: "identity.auth.invalid_refresh_token",
+      }),
+    );
+    const fn = vi.fn<Fn>().mockRejectedValue(unauthorized());
+
+    const failure = (await session
+      .withAuth(fn, { refresh: true })
+      .catch((e: unknown) => e)) as ApiProblem;
+    expect(failure.status).toBe(401);
+    expect((failure.cause as ApiProblem).code).toBe("identity.auth.invalid_refresh_token");
+    expect(store.values.size).toBe(0);
+  });
+
+  it("modo somente leitura (padrão): 401 não renova, não limpa e lança ApiProblem 401", async () => {
+    const session = makeSession();
+    await session.setTokens(pair("1"));
+    const setsBefore = store.setCalls.length;
     const fn = vi.fn<Fn>().mockRejectedValue(unauthorized());
 
     await expect(session.withAuth(fn)).rejects.toMatchObject({ status: 401 });
-    expect(store.values.size).toBe(0);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(store.deleted).toEqual([]);
+    expect(store.setCalls.length).toBe(setsBefore);
+  });
+
+  it("modo somente leitura sem access token: 401 sem rede e sem tocar nos cookies", async () => {
+    const session = makeSession();
+    await session.setTokens(pair("1"));
+    store.values.delete("ks_at");
+
+    await expect(session.withAuth((t) => Promise.resolve(t))).rejects.toMatchObject({
+      status: 401,
+      code: "auth.missing_token",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(store.values.get("ks_rt")).toBe("rt-1");
+    expect(store.deleted).toEqual([]);
+  });
+
+  it("duas sessões com cookies distintos compartilham um refresh e ambas gravam at e rt novos", async () => {
+    const storeB = new FakeCookieStore();
+    const sessionA = makeSession();
+    const sessionB = createSession({
+      cookiePrefix: "ks",
+      audience: "storefront",
+      identityBaseUrl: "http://api.test/identity",
+      secure: true,
+      cookies: storeB,
+    });
+    await sessionA.setTokens(pair("1"));
+    await sessionB.setTokens(pair("1"));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    fetchMock.mockImplementation(() => gate.then(() => jsonResponse(200, pair("2"))));
+
+    const pending = Promise.all([sessionA.refresh(), sessionB.refresh()]);
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    release();
+    await pending;
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    for (const s of [store, storeB]) {
+      expect(s.values.get("ks_at")).toBe("at-2");
+      expect(s.values.get("ks_rt")).toBe("rt-2");
+    }
   });
 
   it("sem access token mas com refresh token, renova antes de chamar fn", async () => {
@@ -199,7 +294,7 @@ describe("withAuth", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, pair("2")));
     const fn = vi.fn((token: string) => Promise.resolve(token));
 
-    expect(await session.withAuth(fn)).toBe("at-2");
+    expect(await session.withAuth(fn, { refresh: true })).toBe("at-2");
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
@@ -207,7 +302,7 @@ describe("withAuth", () => {
     const session = makeSession();
     const fn = vi.fn((token: string) => Promise.resolve(token));
 
-    await expect(session.withAuth(fn)).rejects.toMatchObject({
+    await expect(session.withAuth(fn, { refresh: true })).rejects.toMatchObject({
       status: 401,
       code: "auth.missing_token",
     });
@@ -230,7 +325,10 @@ describe("withAuth", () => {
     const fnA = makeFn();
     const fnB = makeFn();
 
-    const pending = Promise.all([session.withAuth(fnA), session.withAuth(fnB)]);
+    const pending = Promise.all([
+      session.withAuth(fnA, { refresh: true }),
+      session.withAuth(fnB, { refresh: true }),
+    ]);
     // deixa as duas chamadas baterem no 401 antes de liberar o refresh
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -260,7 +358,7 @@ describe("withAuth", () => {
       return Promise.resolve(token);
     });
 
-    expect(await session.withAuth(fn)).toBe("at-2");
+    expect(await session.withAuth(fn, { refresh: true })).toBe("at-2");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

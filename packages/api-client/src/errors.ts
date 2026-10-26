@@ -4,6 +4,7 @@ export interface ApiProblemInit {
   message: string;
   errors?: Record<string, string[]>;
   traceId?: string;
+  cause?: unknown;
 }
 
 /** Erro de API no formato application/problem+json dos serviços. */
@@ -14,7 +15,7 @@ export class ApiProblem extends Error {
   readonly traceId?: string;
 
   constructor(init: ApiProblemInit) {
-    super(init.message);
+    super(init.message, init.cause === undefined ? undefined : { cause: init.cause });
     this.name = "ApiProblem";
     this.status = init.status;
     this.code = init.code;

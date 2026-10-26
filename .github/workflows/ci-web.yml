@@ -5,7 +5,10 @@ on:
     paths:
       - apps/**
       - packages/**
-      - services/*/src/**/api/**
+      - services/*/src/**
+      - libs/py/**
+      - uv.lock
+      - pyproject.toml
       - package.json
       - pnpm-lock.yaml
       - turbo.json
@@ -15,7 +18,10 @@ on:
     paths:
       - apps/**
       - packages/**
-      - services/*/src/**/api/**
+      - services/*/src/**
+      - libs/py/**
+      - uv.lock
+      - pyproject.toml
       - package.json
       - pnpm-lock.yaml
       - turbo.json

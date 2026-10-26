@@ -30,7 +30,9 @@ def install_db_error_handler(app: FastAPI) -> None:
         if sqlstate in DB_INPUT_SQLSTATES:
             problem = ProblemError(422, "request.validation", "Requisição inválida")
             return await _run(app.exception_handlers[ProblemError], request, problem)
-        return await _run(app.exception_handlers[Exception], request, exc)
+        # Demais erros sobem ao ServerErrorMiddleware: traceback no log, exceção no span e
+        # corpo 500 `internal.error` pelo handler da plataforma, como antes deste handler.
+        raise exc
 
     app.add_exception_handler(DBAPIError, _db_error)
 

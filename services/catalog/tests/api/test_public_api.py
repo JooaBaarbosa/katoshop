@@ -9,6 +9,7 @@ import pytest
 from fastapi import FastAPI
 from PIL import Image
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from catalog.application.cursor import encode_cursor
 from catalog.settings import CatalogSettings
@@ -527,3 +528,10 @@ async def test_other_db_errors_stay_500(app: FastAPI, client: httpx.AsyncClient)
     response = await client.get("/test/db-other-error")
     assert response.status_code == 500
     assert response.json()["code"] == "internal.error"
+    # O erro precisa chegar ao ServerErrorMiddleware (traceback no log, exceção no span OTel):
+    # com raise_app_exceptions=True ele escapa do app em vez de virar resposta silenciosa.
+    transport = httpx.ASGITransport(app, raise_app_exceptions=True)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as raw:
+        with pytest.raises(DBAPIError) as raised:
+            await raw.get("/test/db-other-error")
+    assert getattr(raised.value.orig, "sqlstate", None) == "22012"

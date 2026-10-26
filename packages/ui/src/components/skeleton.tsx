@@ -6,7 +6,7 @@ export function Skeleton({ className, ...props }: ComponentProps<"div">) {
     <div
       data-slot="skeleton"
       aria-hidden="true"
-      className={cn("rounded-[var(--radius)] bg-surface motion-safe:animate-pulse", className)}
+      className={cn("rounded-[var(--radius)] bg-ks-fg/10 motion-safe:animate-pulse", className)}
       {...props}
     />
   );

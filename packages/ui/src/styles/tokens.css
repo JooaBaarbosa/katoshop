@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
-/* Identidade SARJETA (spec seção 6). Raio de 2px, nunca pílula. */
-@theme {
+/* Identidade SARJETA (spec seção 6). Raio de 2px, nunca pílula. Tokens brutos da spec. */
+@theme static {
   --color-bg: #0e0e0e;
   --color-surface: #1e1e1e;
   --color-border: #2a2a2a;
@@ -17,12 +17,48 @@
 }
 
 /*
- * As variáveis --font-display, --font-sans e --font-mono vêm do next/font (fonts.ts).
- * Declarar o mesmo nome em @theme criaria uma referência circular, então a família
- * de exibição entra como utilitário.
+ * Tokens semânticos usados pelos componentes. Padrão: loja (escura).
+ * O admin (claro) põe data-theme="admin" no <html> e troca os valores, inclusive o
+ * --color-accent (que vira o acento sobre fundo claro, sempre com texto escuro).
+ * O acento sobre claro nunca é usado em texto pequeno nem como anel de foco.
  */
+:root {
+  --ks-bg: #0e0e0e;
+  --ks-surface: #1e1e1e;
+  --ks-border: #2a2a2a;
+  --ks-fg: #f4f4f0;
+  --ks-muted: #a9a9a4;
+  --ks-accent-fg: #0e0e0e;
+  --ks-focus: #d7ff3a;
+}
+
+[data-theme="admin"] {
+  --ks-bg: #f7f7f4;
+  --ks-surface: #ffffff;
+  --ks-border: #cfcfc8;
+  --ks-fg: #0e0e0e;
+  --ks-muted: #5c5c57;
+  --ks-accent-fg: #0e0e0e;
+  --ks-focus: #0e0e0e;
+  --color-accent: #9dbf00;
+}
+
+@theme inline {
+  --color-ks-bg: var(--ks-bg);
+  --color-ks-surface: var(--ks-surface);
+  --color-ks-border: var(--ks-border);
+  --color-ks-fg: var(--ks-fg);
+  --color-ks-muted: var(--ks-muted);
+  --color-ks-accent-fg: var(--ks-accent-fg);
+  --color-ks-focus: var(--ks-focus);
+
+  /* Fontes auto-hospedadas (fonts.ts). Nomes próprios evitam colidir com o --font-sans/--font-mono do Tailwind. */
+  --font-display: var(--font-anton-nf), Impact, sans-serif;
+  --font-sans: var(--font-inter-nf), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-nf), ui-monospace, monospace;
+}
+
 @utility font-display {
-  font-family: var(--font-display), "Anton", "Impact", sans-serif;
   text-transform: uppercase;
 }
 

@@ -32,7 +32,7 @@ export function TableRow({ className, ...props }: ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors duration-[var(--duration-fast)] hover:bg-black/5",
+        "border-b transition-colors duration-[var(--duration-fast)] hover:bg-ks-fg/5",
         className,
       )}
       {...props}
@@ -63,7 +63,7 @@ export function TableCaption({ className, ...props }: ComponentProps<"caption">)
   return (
     <caption
       data-slot="table-caption"
-      className={cn("mt-4 text-sm text-muted", className)}
+      className={cn("mt-4 text-sm text-ks-muted", className)}
       {...props}
     />
   );

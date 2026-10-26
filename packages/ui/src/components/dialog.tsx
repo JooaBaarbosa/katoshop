@@ -34,13 +34,13 @@ export function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[var(--radius)] border border-border bg-surface p-6 text-fg",
+          "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[var(--radius)] border border-ks-border bg-ks-surface p-6 text-ks-fg",
           className,
         )}
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-[var(--radius)] p-1 text-muted transition-colors duration-[var(--duration-fast)] hover:text-fg focus-visible:outline-2 focus-visible:outline-accent">
+        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-[var(--radius)] p-1 text-ks-muted transition-colors duration-[var(--duration-fast)] hover:text-ks-fg focus-visible:outline-2 focus-visible:outline-ks-focus">
           <X className="size-4" aria-hidden="true" />
           <span className="sr-only">Fechar</span>
         </DialogPrimitive.Close>
@@ -78,7 +78,7 @@ export function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-sm text-muted", className)}
+      className={cn("text-sm text-ks-muted", className)}
       {...props}
     />
   );

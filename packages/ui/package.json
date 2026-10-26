@@ -36,7 +36,8 @@
   "peerDependencies": {
     "next": "16.4.3",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "tailwindcss": "4.3.3"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "1.4.1",
@@ -54,6 +55,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@katoshop/config": "workspace:*",
+    "@tailwindcss/node": "4.3.3",
     "@testing-library/react": "16.3.3",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
@@ -67,6 +69,7 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "sharp": "0.35.5",
+    "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
     "vitest": "5.0.5"
   }

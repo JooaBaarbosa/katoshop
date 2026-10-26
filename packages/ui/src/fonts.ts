@@ -1,21 +1,25 @@
 import { Anton, Inter, JetBrains_Mono } from "next/font/google";
 
-// next/font baixa e auto-hospeda as fontes no build; nenhuma requisição ao Google em runtime.
+/**
+ * next/font baixa e auto-hospeda as fontes no build. As apps colocam
+ * `${anton.variable} ${inter.variable} ${jetbrainsMono.variable}` na className do <html>;
+ * tokens.css mapeia as variáveis para font-display, font-sans e font-mono.
+ */
 export const anton = Anton({
   subsets: ["latin"],
   weight: "400",
-  variable: "--font-display",
+  variable: "--font-anton-nf",
   display: "swap",
 });
 
 export const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-inter-nf",
   display: "swap",
 });
 
 export const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-jetbrains-nf",
   display: "swap",
 });

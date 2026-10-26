@@ -11,8 +11,9 @@ export function Toaster(props: ToasterProps) {
       theme="system"
       toastOptions={{
         classNames: {
-          toast: "!rounded-[var(--radius)] !border !border-border !bg-surface !text-fg !font-sans",
-          description: "!text-muted",
+          toast:
+            "!rounded-[var(--radius)] !border !border-ks-border !bg-ks-surface !text-ks-fg !font-sans",
+          description: "!text-ks-muted",
         },
       }}
       {...props}

@@ -18,14 +18,14 @@ export function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "flex h-10 w-full items-center justify-between gap-2 rounded-[var(--radius)] border border-border bg-surface px-3 text-sm text-fg transition-colors duration-[var(--duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted",
+        "flex h-10 w-full items-center justify-between gap-2 rounded-[var(--radius)] border border-ks-border bg-ks-surface px-3 text-sm text-ks-fg transition-colors duration-[var(--duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ks-focus disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-ks-muted",
         className,
       )}
       {...props}
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown className="size-4 text-muted" aria-hidden="true" />
+        <ChevronDown className="size-4 text-ks-muted" aria-hidden="true" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -43,7 +43,7 @@ export function SelectContent({
         data-slot="select-content"
         position={position}
         className={cn(
-          "relative z-50 max-h-72 min-w-32 overflow-hidden rounded-[var(--radius)] border border-border bg-surface text-fg",
+          "relative z-50 max-h-72 min-w-32 overflow-hidden rounded-[var(--radius)] border border-ks-border bg-ks-surface text-ks-fg",
           position === "popper" && "w-[var(--radix-select-trigger-width)]",
           className,
         )}
@@ -57,7 +57,10 @@ export function SelectContent({
 
 export function SelectLabel({ className, ...props }: ComponentProps<typeof SelectPrimitive.Label>) {
   return (
-    <SelectPrimitive.Label className={cn("px-2 py-1.5 text-xs text-muted", className)} {...props} />
+    <SelectPrimitive.Label
+      className={cn("px-2 py-1.5 text-xs text-ks-muted", className)}
+      {...props}
+    />
   );
 }
 
@@ -70,7 +73,7 @@ export function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default select-none items-center rounded-[var(--radius)] py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-fg/10",
+        "relative flex w-full cursor-default select-none items-center rounded-[var(--radius)] py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-ks-fg/10",
         className,
       )}
       {...props}

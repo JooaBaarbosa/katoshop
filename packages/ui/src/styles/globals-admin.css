@@ -1,12 +1,13 @@
 @import "./tokens.css";
 
-/* Admin: conteúdo claro, barra lateral escura. */
+/* Admin: o <html> precisa de data-theme="admin" (tokens semânticos claros). */
+
 @source "../components";
 
 @layer base {
   html {
-    background-color: var(--color-admin-bg);
-    color: var(--color-bg);
+    background-color: var(--ks-bg);
+    color: var(--ks-fg);
     font-family: var(--font-sans);
   }
   h1,
@@ -18,10 +19,10 @@
   *,
   ::before,
   ::after {
-    border-color: #deded8;
+    border-color: var(--ks-border);
   }
   :focus-visible {
-    outline: 2px solid var(--color-accent-on-light);
+    outline: 2px solid var(--ks-focus);
     outline-offset: 2px;
   }
 }

@@ -1,12 +1,11 @@
 @import "./tokens.css";
 
-/* Loja: tema escuro. Os pacotes de apps adicionam @source para o código da app. */
 @source "../components";
 
 @layer base {
   html {
-    background-color: var(--color-bg);
-    color: var(--color-fg);
+    background-color: var(--ks-bg);
+    color: var(--ks-fg);
     font-family: var(--font-sans);
   }
   h1,
@@ -18,10 +17,10 @@
   *,
   ::before,
   ::after {
-    border-color: var(--color-border);
+    border-color: var(--ks-border);
   }
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--ks-focus);
     outline-offset: 2px;
   }
 }

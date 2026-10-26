@@ -4,13 +4,13 @@ import type { ComponentProps } from "react";
 import { cn } from "../lib/cn";
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] font-sans font-semibold uppercase tracking-wide transition-colors duration-[var(--duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] font-sans font-semibold uppercase tracking-wide transition-colors duration-[var(--duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ks-focus disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        primary: "bg-accent text-bg hover:bg-accent/85",
-        secondary: "border border-fg bg-transparent text-fg hover:bg-fg/10",
-        ghost: "bg-transparent text-fg hover:bg-fg/10",
+        primary: "bg-accent text-ks-accent-fg hover:bg-accent/85",
+        secondary: "border border-ks-fg bg-transparent text-ks-fg hover:bg-ks-fg/10",
+        ghost: "bg-transparent text-ks-fg hover:bg-ks-fg/10",
       },
       size: {
         md: "h-10 px-4 text-sm",

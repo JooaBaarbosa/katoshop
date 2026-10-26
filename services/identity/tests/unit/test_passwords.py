@@ -1,4 +1,9 @@
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from importlib import resources
+
+import pytest
 
 from identity.domain import passwords
 from identity.domain.passwords import (
@@ -69,3 +74,38 @@ def test_common_passwords_file_is_packaged_and_loaded() -> None:
     assert data.is_file()
     assert "123456" in passwords.COMMON_PASSWORDS
     assert not any(line.startswith("#") for line in passwords.COMMON_PASSWORDS)
+
+
+def test_argon2_concurrency_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    # cada hash Argon2 usa 64 MiB; sem limite, uma rajada de logins estoura o mem_limit
+    in_flight = 0
+    peak = 0
+    lock = threading.Lock()
+
+    class SlowHasher:
+        def _work(self) -> None:
+            nonlocal in_flight, peak
+            with lock:
+                in_flight += 1
+                peak = max(peak, in_flight)
+            time.sleep(0.02)
+            with lock:
+                in_flight -= 1
+
+        def hash(self, password: str) -> str:
+            self._work()
+            return "h"
+
+        def verify(self, hash: str, password: str) -> bool:  # noqa: A002
+            self._work()
+            return True
+
+    monkeypatch.setattr(passwords, "_hasher", SlowHasher())
+    with ThreadPoolExecutor(16) as pool:
+        list(
+            pool.map(
+                lambda i: hash_password("x") if i % 2 else verify_password("h", "x"), range(32)
+            )
+        )
+
+    assert peak == passwords.MAX_CONCURRENT_HASHES

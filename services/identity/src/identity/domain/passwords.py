@@ -1,3 +1,4 @@
+import threading
 from importlib import resources
 
 from argon2 import PasswordHasher
@@ -15,6 +16,10 @@ def _load_common_passwords() -> frozenset[str]:
 
 COMMON_PASSWORDS = _load_common_passwords()
 _hasher = PasswordHasher()
+# Cada hash/verificação Argon2 aloca memory_cost (64 MiB por padrão). O pool do to_thread tem
+# até cpu+4 threads, então uma rajada de logins estourava o mem_limit do container (OOM).
+MAX_CONCURRENT_HASHES = 2
+_hash_slots = threading.BoundedSemaphore(MAX_CONCURRENT_HASHES)
 
 
 def validate_password(password: str, email: str) -> list[str]:
@@ -30,14 +35,16 @@ def validate_password(password: str, email: str) -> list[str]:
 
 
 def hash_password(password: str) -> str:
-    return _hasher.hash(password)
+    with _hash_slots:
+        return _hasher.hash(password)
 
 
 def verify_password(hash: str, password: str) -> bool:  # noqa: A002
-    try:
-        return _hasher.verify(hash, password)
-    except VerificationError, InvalidHashError:
-        return False
+    with _hash_slots:
+        try:
+            return _hasher.verify(hash, password)
+        except VerificationError, InvalidHashError:
+            return False
 
 
 DUMMY_HASH = hash_password("dummy-password-for-timing-equalization")

@@ -1,0 +1,44 @@
+name: ci-web
+
+on:
+  push:
+    paths:
+      - apps/**
+      - packages/**
+      - services/*/src/**/api/**
+      - package.json
+      - pnpm-lock.yaml
+      - turbo.json
+      - scripts/export_openapi.py
+      - .github/workflows/ci-web.yml
+  pull_request:
+    paths:
+      - apps/**
+      - packages/**
+      - services/*/src/**/api/**
+      - package.json
+      - pnpm-lock.yaml
+      - turbo.json
+      - scripts/export_openapi.py
+      - .github/workflows/ci-web.yml
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "24.22.1"
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: 0.13.5
+          python-version: "3.15.1"
+      - run: uv sync --all-packages --all-groups
+      - run: pnpm install --frozen-lockfile
+      # quebra de contrato: o OpenAPI/tipos versionados precisam bater com o código dos serviços
+      - run: pnpm gen:api
+      - run: git diff --exit-code packages/api-client
+      - run: pnpm turbo lint typecheck test build

@@ -8,10 +8,11 @@
     "dev:up": "uv run python scripts/gen_keys.py && docker compose up -d --build",
     "dev:down": "docker compose --profile \"*\" down",
     "seed": "echo \"pendente\"",
-    "gen:api": "echo \"pendente\"",
+    "gen:api": "uv run python scripts/export_openapi.py && pnpm --filter @katoshop/api-client gen",
     "test:e2e": "echo \"pendente\"",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
     "test": "turbo run test"
   },
   "devDependencies": {

@@ -5,8 +5,8 @@
   "packageManager": "pnpm@12.15.0",
   "engines": { "node": ">=24" },
   "scripts": {
-    "dev:up": "echo \"pendente\"",
-    "dev:down": "echo \"pendente\"",
+    "dev:up": "uv run python scripts/gen_keys.py && docker compose up -d --build",
+    "dev:down": "docker compose down",
     "seed": "echo \"pendente\"",
     "gen:api": "echo \"pendente\"",
     "test:e2e": "echo \"pendente\"",

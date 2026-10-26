@@ -1,0 +1,169 @@
+# Incluído pela raiz (compose.yaml). Caminhos relativos partem desta pasta (infra/).
+# Orçamento de memória (mem_limit): todos os serviços somados ficam em no máximo 6 GB.
+
+x-python-service: &python-service
+  restart: unless-stopped
+  mem_limit: 384m
+  depends_on:
+    postgres:
+      condition: service_healthy
+  healthcheck:
+    # a imagem slim não tem curl; urlopen levanta exceção em 503 e o processo sai com 1
+    test:
+      - CMD
+      - python
+      - -c
+      - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_USER}"',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  identity:
+    <<: *python-service
+    build:
+      context: ..
+      dockerfile: services/identity/Dockerfile
+    image: katoshop/identity:dev
+    environment:
+      IDENTITY_DATABASE_URL: postgresql+asyncpg://identity_svc:${IDENTITY_DB_PASSWORD}@postgres:5432/identity
+      IDENTITY_JWKS_URL: http://identity:8000/.well-known/jwks.json
+      IDENTITY_OTEL_ENDPOINT: http://otel-collector:4317
+      IDENTITY_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      IDENTITY_SIGNING_KEY_PATH: /run/secrets/identity-signing-key
+      IDENTITY_BOOTSTRAP_ADMIN_EMAIL: ${IDENTITY_BOOTSTRAP_ADMIN_EMAIL}
+      IDENTITY_BOOTSTRAP_ADMIN_PASSWORD: ${IDENTITY_BOOTSTRAP_ADMIN_PASSWORD}
+      IDENTITY_COOKIE_SECURE: "false"
+      # métricas HTTP estáveis: http.server.request.duration em segundos
+      OTEL_SEMCONV_STABILITY_OPT_IN: http
+    secrets:
+      - identity-signing-key
+
+  catalog:
+    <<: *python-service
+    build:
+      context: ..
+      dockerfile: services/catalog/Dockerfile
+    image: katoshop/catalog:dev
+    environment:
+      CATALOG_DATABASE_URL: postgresql+asyncpg://catalog_svc:${CATALOG_DB_PASSWORD}@postgres:5432/catalog
+      CATALOG_JWKS_URL: http://identity:8000/.well-known/jwks.json
+      CATALOG_OTEL_ENDPOINT: http://otel-collector:4317
+      CATALOG_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CATALOG_MEDIA_ROOT: /data/media
+      CATALOG_PUBLIC_BASE_URL: http://api.katoshop.localhost/catalog
+      OTEL_SEMCONV_STABILITY_OPT_IN: http
+    volumes:
+      - media-data:/data/media
+
+  traefik:
+    image: traefik:v3.7.16
+    restart: unless-stopped
+    mem_limit: 128m
+    command: ["--configFile=/etc/traefik/traefik.yml"]
+    ports:
+      - "${KATOSHOP_HTTP_PORT:-80}:80"
+      # dashboard só em desenvolvimento e só no loopback
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./traefik:/etc/traefik:ro
+    depends_on:
+      - identity
+      - catalog
+    networks:
+      default:
+        aliases:
+          - api.katoshop.localhost
+          - katoshop.localhost
+          - admin.katoshop.localhost
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.163.2
+    profiles: [observability]
+    restart: unless-stopped
+    mem_limit: 256m
+    command: ["--config=/etc/otelcol-contrib/collector.yaml"]
+    volumes:
+      - ./otel/collector.yaml:/etc/otelcol-contrib/collector.yaml:ro
+    depends_on:
+      - jaeger
+      - prometheus
+
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    profiles: [observability]
+    restart: unless-stopped
+    mem_limit: 512m
+    ports:
+      - "127.0.0.1:16686:16686"
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    profiles: [observability]
+    restart: unless-stopped
+    mem_limit: 512m
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-otlp-receiver
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    profiles: [observability]
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/red-services.json
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - jaeger
+
+secrets:
+  identity-signing-key:
+    file: ./secrets/identity-signing-key.pem
+
+volumes:
+  pgdata:
+  media-data:
+  prometheus-data:
+  grafana-data:

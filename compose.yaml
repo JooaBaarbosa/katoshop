@@ -1,0 +1,7 @@
+# Ambiente local completo. Uso: pnpm dev:up (núcleo) e
+# docker compose --profile observability up -d (traces, métricas e dashboards).
+name: katoshop
+
+include:
+  - path: infra/compose.yaml
+    env_file: .env

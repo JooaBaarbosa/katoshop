@@ -1,0 +1,34 @@
+# Configuração estática do gateway (desenvolvimento local).
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      # cabeçalhos que se passam por outros (X_Forwarded_For) são descartados
+      aliasHeadersStrategy: delete
+  traefik:
+    address: ":8080"
+    http:
+      aliasHeadersStrategy: delete
+
+# Dashboard na entrada interna 8080 (publicada só no loopback como 8081).
+api:
+  dashboard: true
+  insecure: true
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+log:
+  level: INFO
+
+accessLog:
+  format: json
+
+tracing:
+  serviceName: traefik
+  otlp:
+    grpc:
+      endpoint: otel-collector:4317
+      insecure: true

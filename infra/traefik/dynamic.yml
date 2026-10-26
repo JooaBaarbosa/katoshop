@@ -1,0 +1,59 @@
+# Rotas do gateway api.katoshop.localhost. Os prefixos /identity e /catalog são
+# removidos antes de chegar aos serviços.
+http:
+  routers:
+    identity-auth:
+      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/identity/v1/auth`)"
+      entryPoints: [web]
+      middlewares: [auth-ratelimit, identity-strip]
+      service: identity
+      priority: 200
+
+    identity:
+      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/identity`)"
+      entryPoints: [web]
+      middlewares: [identity-strip]
+      service: identity
+      priority: 100
+
+    catalog:
+      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/catalog`)"
+      entryPoints: [web]
+      middlewares: [catalog-body-limit, catalog-strip]
+      service: catalog
+      priority: 100
+
+  middlewares:
+    identity-strip:
+      stripPrefix:
+        prefixes: ["/identity"]
+
+    catalog-strip:
+      stripPrefix:
+        prefixes: ["/catalog"]
+
+    # Login, cadastro e refresh: 10 req/s em média, rajada de 20, por IP de origem.
+    auth-ratelimit:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 0
+
+    # Teto real do corpo (upload de imagem até 8 MiB + folga do multipart): 9 MiB.
+    catalog-body-limit:
+      buffering:
+        maxRequestBodyBytes: 9437184
+
+  services:
+    identity:
+      loadBalancer:
+        servers:
+          - url: "http://identity:8000"
+
+    catalog:
+      loadBalancer:
+        servers:
+          - url: "http://catalog:8000"

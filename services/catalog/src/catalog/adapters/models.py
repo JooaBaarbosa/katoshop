@@ -86,6 +86,7 @@ class Product(Base):
         Index("ix_products_search_vector", "search_vector", postgresql_using="gin"),
         Index("ix_products_category_id", "category_id"),
         Index("ix_products_status_published_at", "status", "published_at"),
+        Index("ix_products_status_min_price", "status", "min_price_cents", "id"),
     )
 
     id: Mapped[uuid.UUID] = _pk()
@@ -191,6 +192,7 @@ class Collection(Base):
 
 class CollectionProduct(Base):
     __tablename__ = "collection_products"
+    __table_args__ = (Index("ix_collection_products_product_id", "product_id"),)
 
     collection_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("collections.id", ondelete="CASCADE"), primary_key=True

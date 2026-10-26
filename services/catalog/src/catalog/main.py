@@ -8,6 +8,7 @@ from catalog.adapters.repositories import sql_unit_of_work
 from catalog.adapters.storage_local import LocalImageStorage
 from catalog.api.routes_admin import router as admin_router
 from catalog.api.routes_media import router as media_router
+from catalog.api.routes_public import router as public_router
 from catalog.application.admin_service import AdminCatalogService
 from catalog.settings import CatalogSettings
 from ks_platform.auth import JwksKeyProvider, TokenVerifier
@@ -47,6 +48,7 @@ def create_app(settings: CatalogSettings | None = None) -> FastAPI:
     app.include_router(health_router(ready_check))
     app.include_router(admin_router)
     app.include_router(media_router)
+    app.include_router(public_router)
     return app
 
 

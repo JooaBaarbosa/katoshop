@@ -8,7 +8,7 @@ import math
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from sqlalchemy import (
@@ -49,6 +49,10 @@ MAX_QUERY_LENGTH = 200
 QUERY_TOO_LONG = "catalog.search.query_too_long"
 _INT4_MAX = 2**31 - 1
 _PRICE_KEY_RE = re.compile(r"^[0-9]{1,10}$")
+# Datas de publicação reais caem aqui; fora disso o cursor foi adulterado (e anos extremos
+# estouram na conversão para UTC dentro do driver).
+_MIN_CURSOR_YEAR = 2000
+_MAX_CURSOR_YEAR = 9998
 _CURSOR_KEYS = ("s", "k", "id")
 # Constante do código, nunca entrada do usuário.
 _TS_CONFIG = literal_column("'portuguese'::regconfig")
@@ -289,8 +293,11 @@ def _decode_key(raw: str, sort: SortOrder) -> tuple[SortKey, uuid.UUID]:
         product_id = uuid.UUID(payload["id"])
         key: SortKey
         if sort == "newest":
-            key = datetime.fromisoformat(text)
-            if key.tzinfo is None:
+            parsed = datetime.fromisoformat(text)
+            if parsed.tzinfo is None:
+                raise invalid_cursor()
+            key = parsed.astimezone(UTC)
+            if not _MIN_CURSOR_YEAR <= key.year <= _MAX_CURSOR_YEAR:
                 raise invalid_cursor()
         elif sort == "relevance":
             key = float(text)
@@ -300,7 +307,7 @@ def _decode_key(raw: str, sort: SortOrder) -> tuple[SortKey, uuid.UUID]:
             if not _PRICE_KEY_RE.fullmatch(text) or int(text) > _INT4_MAX:
                 raise invalid_cursor()
             key = int(text)
-    except ValueError as exc:
+    except (ValueError, OverflowError) as exc:
         raise invalid_cursor() from exc
     return key, product_id
 

@@ -1,9 +1,11 @@
 """Rotas públicas da vitrine: sem autenticação, com cache HTTP curto."""
 
+import re
 from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from pydantic import StringConstraints
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from catalog.adapters import product_queries as queries
@@ -36,8 +38,21 @@ _INT4_MAX = 2**31 - 1
 # Sem max_length no cursor: o decode devolve o código próprio de cursor inválido.
 Cursor = Annotated[str | None, Query()]
 Limit = Annotated[int, Query(ge=1, le=100)]
-SlugParam = Annotated[str | None, Query(max_length=160)]
-Codes = Annotated[list[str], Query(max_length=20)]
+# Validação na borda: o Postgres recusa NUL em texto (seria 500), e nada fora destes formatos
+# existe no catálogo. Slugs de categoria e coleção têm até 120; de produto, até 160.
+SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+_SLUG_RE = re.compile(SLUG_PATTERN)
+SlugParam = Annotated[str | None, Query(max_length=120, pattern=SLUG_PATTERN)]
+OptionCode = Annotated[str, StringConstraints(pattern=r"^[A-Z]{1,4}$")]
+Codes = Annotated[list[OptionCode], Query(max_length=20)]
+SearchText = Annotated[str | None, Query(pattern=r"^[^\x00-\x1f\x7f]*$")]
+
+
+def _is_slug(value: str, max_length: int) -> bool:
+    # Slug de caminho fora do padrão é tratado como inexistente (404), não como 422.
+    return len(value) <= max_length and _SLUG_RE.fullmatch(value) is not None
+
+
 Price = Annotated[int | None, Query(ge=0, le=_INT4_MAX)]
 
 
@@ -69,7 +84,7 @@ def product_filter(
     color: Codes = [],  # noqa: B006
     price_min: Price = None,
     price_max: Price = None,
-    q: str | None = None,
+    q: SearchText = None,
     sort: SortOrder = "relevance",
 ) -> ProductFilter:
     return ProductFilter(
@@ -115,7 +130,7 @@ async def product_facets(f: Filter, session: Session, response: Response) -> Fac
 async def product_detail(
     slug: str, session: Session, base: MediaBase, response: Response
 ) -> ProductDetailOut:
-    detail = await queries.product_detail(session, slug)
+    detail = await queries.product_detail(session, slug) if _is_slug(slug, 160) else None
     if detail is None:
         raise ProblemError(404, PRODUCT_NOT_FOUND, "Produto não encontrado")
     response.headers["Cache-Control"] = CACHE_CONTROL
@@ -139,7 +154,11 @@ async def list_collections(service: Service, response: Response) -> PublicCollec
 @router.get("/collections/{slug}")
 async def get_collection(slug: str, service: Service, response: Response) -> PublicCollection:
     # Poucas coleções por loja: filtrar a lista evita uma consulta só para isso.
-    found = [c for c in await service.list_collections() if c.slug == slug]
+    found = (
+        [c for c in await service.list_collections() if c.slug == slug]
+        if _is_slug(slug, 120)
+        else []
+    )
     if not found:
         raise ProblemError(404, COLLECTION_NOT_FOUND, "Coleção não encontrada")
     response.headers["Cache-Control"] = CACHE_CONTROL

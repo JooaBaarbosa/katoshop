@@ -154,16 +154,73 @@ async def test_repeatable_size_and_color_params(
 
 
 @pytest.mark.parametrize(
-    "q",
-    ["", "   ", "&|!", '"aspas', "x" * 200, "a:* & !b", "'; drop"],
-    ids=["empty", "spaces", "operators", "quote", "200-chars", "prefix-ops", "sql"],
+    ("q", "status"),
+    [
+        ("", 200),
+        ("   ", 200),
+        ("&|!", 200),
+        ('"aspas', 200),
+        ("x" * 200, 200),
+        ("a:* & !b", 200),
+        ("'; drop", 200),
+        ("\x00", 422),
+        ("a\x00b", 422),
+        ("linha\nnova", 422),
+        ("del\x7f", 422),
+    ],
+    ids=[
+        "empty",
+        "spaces",
+        "operators",
+        "quote",
+        "200-chars",
+        "prefix-ops",
+        "sql",
+        "nul",
+        "inner-nul",
+        "newline",
+        "del",
+    ],
 )
-async def test_odd_queries_never_500(client: httpx.AsyncClient, q: str) -> None:
+async def test_odd_queries_never_500(client: httpx.AsyncClient, q: str, status: int) -> None:
+    # Caracteres de controle são recusados na borda (o Postgres não aceita NUL em texto).
     for sort in ("relevance", "newest"):
         response = await anon_get(client, "/v1/products", q=q, sort=sort)
-        assert response.status_code == 200, response.text
+        assert response.status_code == status, response.text
         facets = await anon_get(client, "/v1/products/facets", q=q)
-        assert facets.status_code == 200, facets.text
+        assert facets.status_code == status, facets.text
+        if status == 422:
+            assert response.json()["code"] == "request.validation"
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"category": "a\x00"},
+        {"collection": "a\x00b"},
+        {"category": "Com Espaço"},
+        {"category": "x" * 121},
+        {"size": "M\x00"},
+        {"color": "PRT\x00"},
+        {"size": "m"},
+        {"color": "PRETO"},
+    ],
+    ids=[
+        "category-nul",
+        "collection-nul",
+        "category-pattern",
+        "category-too-long",
+        "size-nul",
+        "color-nul",
+        "size-lowercase",
+        "color-too-long",
+    ],
+)
+async def test_text_params_validated_422(client: httpx.AsyncClient, params: dict[str, str]) -> None:
+    for url in ("/v1/products", "/v1/products/facets"):
+        response = await anon_get(client, url, **params)
+        assert response.status_code == 422, response.text
+        assert response.json()["code"] == "request.validation"
 
 
 async def test_query_too_long_422(client: httpx.AsyncClient) -> None:
@@ -186,8 +243,19 @@ def _b64(raw: bytes) -> str:
         "a" * 513,
         "não-ascii-é",
         encode_cursor({"s": "price_asc", "k": "100", "id": str(uuid.uuid7())}),
+        encode_cursor({"s": "newest", "k": "0001-01-01T00:00:00+05:00", "id": str(uuid.uuid7())}),
+        encode_cursor({"s": "newest", "k": "9999-12-31T23:59:59-05:00", "id": str(uuid.uuid7())}),
     ],
-    ids=["lixo", "truncated-json", "nested-10k", "513-chars", "non-ascii", "other-sort"],
+    ids=[
+        "lixo",
+        "truncated-json",
+        "nested-10k",
+        "513-chars",
+        "non-ascii",
+        "other-sort",
+        "year-1-overflow",
+        "year-9999-overflow",
+    ],
 )
 async def test_bad_cursor_422(client: httpx.AsyncClient, cursor: str) -> None:
     response = await anon_get(client, "/v1/products", sort="newest", cursor=cursor)
@@ -325,7 +393,8 @@ async def test_detail_inactive_404(
     archived = await publish(stock={("PRT", "M"): 1})
     done = await admin_client.post(f"/v1/admin/products/{archived['id']}/archive")
     assert done.status_code == 200, done.text
-    for slug in (draft["slug"], archived["slug"], "nao-existe", "x" * 300):
+    # Slug fora do padrão (NUL, maiúsculas, longo demais) é só um produto inexistente.
+    for slug in (draft["slug"], archived["slug"], "nao-existe", "x" * 300, "a%00b", "Maiusc"):
         response = await anon_get(client, f"/v1/products/{slug}")
         assert response.status_code == 404, slug
         assert response.json()["code"] == "catalog.product.not_found"
@@ -381,9 +450,10 @@ async def test_collections(
     detail = await anon_get(client, f"/v1/collections/{slug}")
     assert detail.status_code == 200
     assert detail.json() == expected
-    missing = await anon_get(client, "/v1/collections/nao-existe")
-    assert missing.status_code == 404
-    assert missing.json()["code"] == "catalog.collection.not_found"
+    for absent in ("nao-existe", "a%00b", "x" * 200):
+        missing = await anon_get(client, f"/v1/collections/{absent}")
+        assert missing.status_code == 404
+        assert missing.json()["code"] == "catalog.collection.not_found"
     products = await anon_get(client, "/v1/products", collection=slug)
     assert [p["slug"] for p in products.json()["items"]] == [inside["slug"]]
 
@@ -421,3 +491,39 @@ async def test_credits(
         "license": "CC0",
     } in items
     assert all(i["product_name"] != hidden for i in items)
+
+
+@pytest.mark.parametrize(
+    ("sql", "params"),
+    [
+        ("SELECT CAST(:v AS text)", {"v": "a\x00b"}),
+        ("SELECT make_timestamp(2026, 13, 1, 0, 0, 0)", {}),
+    ],
+    ids=["22021-nul-byte", "22008-datetime-overflow"],
+)
+async def test_db_input_errors_map_to_422(
+    app: FastAPI, client: httpx.AsyncClient, sql: str, params: dict[str, str]
+) -> None:
+    """Defesa em profundidade: entrada que escapou da validação vira 422, não 500."""
+
+    async def broken() -> dict[str, str]:
+        async with app.state.session_factory() as session:
+            await session.execute(text(sql), params)
+        return {}
+
+    app.add_api_route("/test/db-input-error", broken)
+    response = await client.get("/test/db-input-error")
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "request.validation"
+
+
+async def test_other_db_errors_stay_500(app: FastAPI, client: httpx.AsyncClient) -> None:
+    async def broken() -> dict[str, str]:
+        async with app.state.session_factory() as session:
+            await session.execute(text("SELECT 1 / 0"))
+        return {}
+
+    app.add_api_route("/test/db-other-error", broken)
+    response = await client.get("/test/db-other-error")
+    assert response.status_code == 500
+    assert response.json()["code"] == "internal.error"

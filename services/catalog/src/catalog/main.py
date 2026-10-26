@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from catalog.adapters.repositories import sql_unit_of_work
 from catalog.adapters.storage_local import LocalImageStorage
+from catalog.api.errors import install_db_error_handler
 from catalog.api.routes_admin import router as admin_router
 from catalog.api.routes_media import router as media_router
 from catalog.api.routes_public import router as public_router
@@ -44,6 +45,7 @@ def create_app(settings: CatalogSettings | None = None) -> FastAPI:
     app.state.image_storage = storage
     app.state.admin_service = AdminCatalogService(sql_unit_of_work(session_factory), storage)
     install_problem_handlers(app)
+    install_db_error_handler(app)
     configure_observability(app, settings, engine)
     app.include_router(health_router(ready_check))
     app.include_router(admin_router)

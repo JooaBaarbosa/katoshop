@@ -342,6 +342,9 @@ def _b64(raw: bytes) -> str:
         encode_cursor({"s": "newest", "k": "2026-10-24T10:00:00", "id": str(uuid.uuid7())}),
         encode_cursor({"s": "newest", "k": "2026-10-24T10:00:00+00:00", "id": "x"}),
         encode_cursor({"s": "newest", "id": str(uuid.uuid7())}),
+        encode_cursor({"s": "newest", "k": "0001-01-01T00:00:00+05:00", "id": str(uuid.uuid7())}),
+        encode_cursor({"s": "newest", "k": "9999-12-31T23:59:59-05:00", "id": str(uuid.uuid7())}),
+        encode_cursor({"s": "newest", "k": "1999-12-31T23:59:59+00:00", "id": str(uuid.uuid7())}),
     ],
     ids=[
         "lixo",
@@ -353,6 +356,9 @@ def _b64(raw: bytes) -> str:
         "naive-timestamp",
         "bad-id",
         "missing-key",
+        "year-1-overflow",
+        "year-9999-overflow",
+        "before-2000",
     ],
 )
 async def test_bad_cursor_422(session: AsyncSession, seeded: Seeded, cursor: str) -> None:

@@ -38,3 +38,23 @@ async def test_bootstrap_weak_password_fails_startup(settings: IdentitySettings)
     with pytest.raises(RuntimeError, match=r"IDENTITY_BOOTSTRAP_ADMIN_PASSWORD.*too_short"):
         async with LifespanManager(app):
             pass
+
+
+async def test_bootstrap_admin_with_localhost_email_can_login(
+    settings: IdentitySettings,
+) -> None:
+    settings = settings.model_copy(
+        update={
+            "bootstrap_admin_email": "admin@katoshop.localhost",
+            "bootstrap_admin_password": BOOTSTRAP_PASSWORD,
+        }
+    )
+    app = create_app(settings)
+    async with LifespanManager(app):
+        transport = httpx.ASGITransport(app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/v1/auth/staff/login",
+                json={"email": "admin@katoshop.localhost", "password": BOOTSTRAP_PASSWORD},
+            )
+    assert response.status_code == 200, response.text

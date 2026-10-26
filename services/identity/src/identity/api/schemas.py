@@ -2,7 +2,8 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, EmailStr, StringConstraints
+import email_validator
+from pydantic import AfterValidator, BaseModel, StringConstraints
 
 from identity.application.auth_service import TokenPair
 from identity.application.ports import UserRecord
@@ -11,15 +12,34 @@ from identity.application.ports import UserRecord
 Password = Annotated[str, StringConstraints(max_length=256)]
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 
+# Os endereços demo usam katoshop.localhost (R14). O email-validator recusa nomes de uso
+# especial mesmo com globally_deliverable=False; a lista é o ajuste documentado da lib.
+if "localhost" in email_validator.SPECIAL_USE_DOMAIN_NAMES:
+    email_validator.SPECIAL_USE_DOMAIN_NAMES.remove("localhost")
+
+
+def _validate_email(value: str) -> str:
+    """Só sintaxe (sem DNS); devolve a forma normalizada. Caixa fica com o serviço."""
+    try:
+        result = email_validator.validate_email(
+            value.strip(), check_deliverability=False, globally_deliverable=False
+        )
+    except email_validator.EmailNotValidError as exc:
+        raise ValueError(f"value is not a valid email address: {exc}") from exc
+    return result.normalized
+
+
+EmailAddress = Annotated[str, StringConstraints(max_length=320), AfterValidator(_validate_email)]
+
 
 class RegisterIn(BaseModel):
-    email: EmailStr
+    email: EmailAddress
     password: Password
     name: Name
 
 
 class LoginIn(BaseModel):
-    email: EmailStr
+    email: EmailAddress
     password: Password
 
 
@@ -29,7 +49,7 @@ class RefreshIn(BaseModel):
 
 class MePatchIn(BaseModel):
     name: Name | None = None
-    email: EmailStr | None = None
+    email: EmailAddress | None = None
     new_password: Password | None = None
     current_password: Password | None = None
 

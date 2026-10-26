@@ -2,6 +2,7 @@ from typing import Any
 
 import httpx
 import jwt
+import pytest
 from fastapi import Depends, FastAPI
 from sqlalchemy import update
 
@@ -237,3 +238,35 @@ async def test_login_normalizes_padded_mixed_case_email(client: httpx.AsyncClien
     )
 
     assert response.status_code == 200
+
+
+async def test_localhost_email_register_login_and_staff_login(
+    client: httpx.AsyncClient, app: FastAPI
+) -> None:
+    # R14: os endereços demo usam o domínio de uso especial katoshop.localhost
+    registered = await register(client, "  Cliente@Katoshop.Localhost ")
+    assert registered["user"]["email"] == "cliente@katoshop.localhost"  # type: ignore[index]
+    login = await client.post(
+        "/v1/auth/login", json={"email": "cliente@katoshop.localhost", "password": PASSWORD}
+    )
+    assert login.status_code == 200
+
+    await app.state.auth_service.create_staff("equipe@katoshop.localhost", STAFF_PASSWORD, "Equipe")
+    staff = await client.post(
+        "/v1/auth/staff/login",
+        json={"email": "Equipe@katoshop.localhost", "password": STAFF_PASSWORD},
+    )
+    assert staff.status_code == 200
+    assert _claims(staff.json()["access_token"])["aud"] == "admin"
+
+
+@pytest.mark.parametrize(
+    "email", ["a@@katoshop.localhost", "sem-arroba.localhost", "a b@x.com", ""]
+)
+async def test_invalid_email_syntax_still_422(client: httpx.AsyncClient, email: str) -> None:
+    for path in ("/v1/auth/register", "/v1/auth/login", "/v1/auth/staff/login"):
+        response = await client.post(
+            path, json={"email": email, "password": PASSWORD, "name": "Ana"}
+        )
+        assert response.status_code == 422, (path, response.text)
+        assert set(response.json()["errors"]) == {"body.email"}

@@ -117,3 +117,14 @@ async def test_patch_me_wrong_current_password_counts_toward_lockout(
         "/v1/auth/login", json={"email": "ana@example.com", "password": PASSWORD}
     )
     assert login.status_code == 401
+
+
+async def test_patch_me_accepts_localhost_email(client: httpx.AsyncClient) -> None:
+    pair = await register(client)
+    response = await client.patch(
+        "/v1/me",
+        json={"email": "Ana@Katoshop.Localhost", "current_password": PASSWORD},
+        headers=_auth(pair),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["email"] == "ana@katoshop.localhost"

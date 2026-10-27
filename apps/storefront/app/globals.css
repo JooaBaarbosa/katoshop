@@ -1,0 +1,4 @@
+@import "@katoshop/ui/styles/globals-store.css";
+
+/* classes usadas pelos componentes compartilhados */
+@source "../../../packages/ui/src";

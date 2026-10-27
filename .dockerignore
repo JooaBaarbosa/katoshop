@@ -1,0 +1,13 @@
+# Contexto de build é a raiz; os Dockerfiles copiam só o que precisam.
+**/node_modules
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+**/__pycache__
+.venv
+.git
+.superpowers
+.env
+infra/secrets
+test-results
+playwright-report

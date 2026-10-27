@@ -1,5 +1,5 @@
-# Rotas do gateway api.katoshop.localhost. Os prefixos /identity e /catalog são
-# removidos antes de chegar aos serviços.
+# Rotas do gateway api.katoshop.localhost (os prefixos /identity e /catalog são
+# removidos antes de chegar aos serviços) e da loja em katoshop.localhost.
 http:
   routers:
     # Só endpoints de credencial (R15). Refresh e logout ficam de fora: os BFFs do Next
@@ -25,6 +25,12 @@ http:
       entryPoints: [web]
       middlewares: [catalog-body-limit, catalog-strip]
       service: catalog
+      priority: 100
+
+    storefront:
+      rule: "Host(`katoshop.localhost`)"
+      entryPoints: [web]
+      service: storefront
       priority: 100
 
   middlewares:
@@ -61,3 +67,8 @@ http:
       loadBalancer:
         servers:
           - url: "http://catalog:8000"
+
+    storefront:
+      loadBalancer:
+        servers:
+          - url: "http://storefront:3000"

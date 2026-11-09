@@ -1,9 +1,11 @@
 import { anton, inter, jetbrainsMono } from "@katoshop/ui/fonts";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { siteUrl } from "../lib/env";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: { default: "KatoShop | Streetwear em tecido pesado", template: "%s | KatoShop" },
   description: "Loja demonstrativa de streetwear: camisetas, moletons e calças em tecido pesado.",
 };

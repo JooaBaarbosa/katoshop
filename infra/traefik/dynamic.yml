@@ -28,8 +28,22 @@ http:
       service: catalog
       priority: 100
 
+    # R24: o Next 16 despacha Server Actions pelo cabeçalho Next-Action, em qualquer caminho
+    # (um POST em / com o id do loginAction chega ao login sem passar pelo router de /entrar).
+    # Todo POST de Server Action é limitado por IP de cliente, nas duas apps.
+    storefront-actions:
+      rule: >-
+        Host(`katoshop.localhost`) && Method(`POST`)
+        && HeaderRegexp(`Next-Action`, `.+`)
+      entryPoints: [web]
+      middlewares: [auth-ratelimit]
+      service: storefront
+      priority: 300
+
     # R20: login e cadastro chegam ao identity pelo IP do container da loja, então o limite
     # por IP do gateway virou um balde global. Aqui o limite volta a ser por cliente.
+    # Mantido ao lado do R24: sem JavaScript o formulário posta o id da action no corpo, sem o
+    # cabeçalho Next-Action, então só o caminho identifica o login e o cadastro.
     storefront-auth:
       rule: >-
         Host(`katoshop.localhost`) && Method(`POST`)
@@ -45,7 +59,18 @@ http:
       service: storefront
       priority: 100
 
+    # R24 no painel (ver storefront-actions).
+    admin-actions:
+      rule: >-
+        Host(`admin.katoshop.localhost`) && Method(`POST`)
+        && HeaderRegexp(`Next-Action`, `.+`)
+      entryPoints: [web]
+      middlewares: [auth-ratelimit]
+      service: admin
+      priority: 300
+
     # R20 no painel: o login de funcionário também sai do container do admin para o identity.
+    # Cobre o POST sem JavaScript (sem cabeçalho Next-Action), como storefront-auth.
     admin-auth:
       rule: "Host(`admin.katoshop.localhost`) && Method(`POST`) && Path(`/entrar`)"
       entryPoints: [web]
@@ -68,8 +93,9 @@ http:
       stripPrefix:
         prefixes: ["/catalog"]
 
-    # Login, login de staff e cadastro (gateway e formulários da loja e do painel): 10 req/s em média,
-    # rajada de 20, por IP de origem. O Traefik instancia o balde por router.
+    # Login, login de staff e cadastro (gateway) e todo POST de Server Action ou de formulário
+    # de login/cadastro das apps: 10 req/s em média, rajada de 20, por IP de origem. O Traefik
+    # instancia o balde por router.
     auth-ratelimit:
       rateLimit:
         average: 10

@@ -4,8 +4,6 @@ import { ProductListing } from "../../../../components/product-listing";
 import { parseFilters, type RawSearchParams } from "../../../../lib/filters";
 import { collectionBySlug } from "../../../../lib/storefront";
 
-export const revalidate = 60;
-
 type Props = {
   params: Promise<{ slug: string }>;
   searchParams: Promise<RawSearchParams>;

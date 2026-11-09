@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { ProductListing } from "../../../components/product-listing";
 import { parseFilters, type RawSearchParams } from "../../../lib/filters";
 
-export const revalidate = 60;
-
 export const metadata: Metadata = {
   title: "Busca",
   description: "Busque camisetas, moletons e calças na KatoShop, loja demonstrativa.",

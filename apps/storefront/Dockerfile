@@ -10,6 +10,9 @@ COPY apps/storefront apps/storefront
 RUN found="$(find apps/storefront packages -name '.env*' ! -name '.env.example' -not -path '*/node_modules/*')"; \
     if [ -n "$found" ]; then echo "arquivo .env no contexto de build: $found" >&2; exit 1; fi
 RUN pnpm install --frozen-lockfile --filter @katoshop/storefront...
+# lido pelo next.config.ts no build (o standalone congela a config de imagens)
+ARG IMAGES_ALLOW_LOCAL_IP=false
+ENV IMAGES_ALLOW_LOCAL_IP=$IMAGES_ALLOW_LOCAL_IP
 RUN pnpm --filter @katoshop/storefront build
 
 FROM node:24.22.1-alpine

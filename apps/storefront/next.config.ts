@@ -16,9 +16,11 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "http", hostname: "api.katoshop.localhost", pathname: "/catalog/v1/media/**" },
     ],
-    // O gateway da demo é sempre local (IP privado ou loopback), que o otimizador recusa por padrão.
-    // O risco de SSRF fica contido: remotePatterns só aceita esse host e esse caminho.
-    dangerouslyAllowLocalIP: true,
+    // O gateway local resolve para IP privado (Traefik) ou loopback, que o otimizador recusa por
+    // padrão. Liberar só com IMAGES_ALLOW_LOCAL_IP=true (compose local), lido no BUILD: o
+    // standalone congela esta config. Atenção: o otimizador segue redirects sem reaplicar
+    // remotePatterns, então a rota de mídia do catálogo nunca pode redirecionar.
+    dangerouslyAllowLocalIP: process.env.IMAGES_ALLOW_LOCAL_IP === "true",
   },
 };
 

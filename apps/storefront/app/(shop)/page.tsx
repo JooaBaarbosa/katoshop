@@ -12,7 +12,9 @@ import {
   storeSettings,
 } from "../../lib/storefront";
 
-export const revalidate = 60;
+// Ruling R21: renderização por requisição (o build não alcança o catálogo e congelaria o
+// fallback). A revalidação de 60 s fica na camada de dados: cada fetch usa next.revalidate = 60.
+export const dynamic = "force-dynamic";
 
 const NEW_ARRIVALS = 8;
 const PER_COLLECTION = 4;

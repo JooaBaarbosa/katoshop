@@ -83,6 +83,9 @@ services:
     build:
       context: ..
       dockerfile: apps/storefront/Dockerfile
+      args:
+        # o gateway local tem IP privado; só o compose local libera o otimizador de imagens para ele
+        IMAGES_ALLOW_LOCAL_IP: "true"
     image: katoshop/storefront:dev
     restart: unless-stopped
     mem_limit: 384m

@@ -11,8 +11,6 @@ import type { RawSearchParams } from "../../../../lib/filters";
 import { findVariant, imagesForColor, type ProductDetail, sizeStates } from "../../../../lib/pdp";
 import { productDetail, storePolicies } from "../../../../lib/storefront";
 
-export const revalidate = 60;
-
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<RawSearchParams> };
 
 /** Uma busca por requisição, compartilhada entre metadata e página. */

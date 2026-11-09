@@ -176,3 +176,41 @@ describe("detalhe e configurações", () => {
     expect(second.params.query).toMatchObject({ cursor: "c1", limit: 100 });
   });
 });
+
+const { categoryBySlug } = await import("../lib/storefront");
+
+describe("fix round 1: indisponível não é inexistente", () => {
+  it("categoria existente vem da lista carregada", async () => {
+    get.mockResolvedValue(
+      reply(200, { items: [{ slug: "moletons", name: "Moletons", parent_slug: null, position: 1 }] }),
+    );
+    await expect(categoryBySlug("moletons")).resolves.toEqual({
+      ok: true,
+      data: { slug: "moletons", name: "Moletons", parent_slug: null, position: 1 },
+    });
+  });
+
+  it("not_found só quando a lista carregou e o slug não está nela", async () => {
+    get.mockResolvedValue(reply(200, { items: [] }));
+    await expect(categoryBySlug("nao-existe")).resolves.toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("catálogo fora do ar (5xx ou timeout) é unavailable, não not_found", async () => {
+    get.mockResolvedValue(reply(503));
+    await expect(categoryBySlug("moletons")).resolves.toEqual({ ok: false, reason: "unavailable" });
+    get.mockImplementation(timeout);
+    await expect(categoryBySlug("moletons")).resolves.toEqual({ ok: false, reason: "unavailable" });
+  });
+
+  it("slugs do sitemap: erro no meio da paginação lança em vez de devolver lista parcial", async () => {
+    get
+      .mockResolvedValueOnce(reply(200, { items: [{ slug: "a" }], next_cursor: "c1" }))
+      .mockResolvedValueOnce(reply(503));
+    await expect(allProductSlugs()).rejects.toThrow();
+  });
+
+  it("slugs do sitemap: erro já na primeira página também lança", async () => {
+    get.mockImplementation(timeout);
+    await expect(allProductSlugs()).rejects.toThrow();
+  });
+});

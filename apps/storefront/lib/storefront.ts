@@ -70,14 +70,8 @@ export async function storePolicies(): Promise<Policies | null> {
 
 /** Todas as categorias (inclusive subcategorias); vazio se o catálogo não responder. */
 export async function allCategories(): Promise<PublicCategory[]> {
-  try {
-    const { data } = await withDeadline((signal) =>
-      catalog().GET("/v1/categories", { fetch: revalidate(REVALIDATE_SECONDS), signal }),
-    );
-    return data?.items ?? [];
-  } catch {
-    return [];
-  }
+  const result = await categoryList();
+  return result.ok ? result.data : [];
 }
 
 /** Coleções publicadas; vazio se o catálogo não responder. */
@@ -107,6 +101,27 @@ async function fetched<T>(
   } catch {
     return { ok: false, reason: "unavailable" };
   }
+}
+
+function categoryList(): Promise<Fetched<PublicCategory[]>> {
+  return fetched(async (signal) => {
+    const { data, response } = await catalog().GET("/v1/categories", {
+      fetch: revalidate(REVALIDATE_SECONDS),
+      signal,
+    });
+    return { data: data?.items, response };
+  });
+}
+
+/**
+ * Categoria pelo slug. `not_found` só quando a lista carregou e o slug não está nela;
+ * catálogo fora do ar é `unavailable` (a página lança e cai na página de erro, não em 404).
+ */
+export async function categoryBySlug(slug: string): Promise<Fetched<PublicCategory>> {
+  const result = await categoryList();
+  if (!result.ok) return { ok: false, reason: "unavailable" };
+  const category = result.data.find((c) => c.slug === slug);
+  return category ? { ok: true, data: category } : { ok: false, reason: "not_found" };
 }
 
 export async function collectionBySlug(slug: string): Promise<Fetched<PublicCollection>> {
@@ -175,13 +190,16 @@ export async function productFacets(scope: ListingScope, f: CatalogFilters): Pro
 /** Limite de páginas do sitemap (100 produtos cada), para nunca ficar em laço. */
 const SITEMAP_MAX_PAGES = 100;
 
-/** Slugs de todos os produtos ativos, paginando a API; para no primeiro erro. */
+/**
+ * Slugs de todos os produtos ativos, paginando a API. Qualquer erro lança: o sitemap responde
+ * com erro em vez de publicar uma lista truncada.
+ */
 export async function allProductSlugs(): Promise<string[]> {
   const slugs: string[] = [];
   let cursor: string | undefined;
   for (let page = 0; page < SITEMAP_MAX_PAGES; page++) {
     const result = await listProducts({}, { size: [], color: [], sort: "newest" }, cursor, 100);
-    if (!result.ok) break;
+    if (!result.ok) throw new Error(`Catálogo ${result.reason} ao montar o sitemap`);
     slugs.push(...result.data.items.map((item) => item.slug));
     if (!result.data.next_cursor) break;
     cursor = result.data.next_cursor;

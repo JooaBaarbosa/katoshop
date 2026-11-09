@@ -2,7 +2,10 @@ import type { MetadataRoute } from "next";
 import { siteUrl } from "../lib/env";
 import { allCategories, allCollections, allProductSlugs } from "../lib/storefront";
 
-export const revalidate = 3600;
+// Ruling R21: renderização por requisição (o build não alcança o catálogo e congelaria o
+// fallback). A revalidação de 60 s fica na camada de dados: cada fetch usa next.revalidate = 60.
+export const dynamic = "force-dynamic";
+// Erro do catálogo durante a paginação lança (resposta 500), nunca um sitemap truncado.
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();

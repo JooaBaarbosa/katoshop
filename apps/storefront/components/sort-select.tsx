@@ -1,5 +1,3 @@
-"use client";
-
 import { Button } from "@katoshop/ui/button";
 import { ChevronDown } from "lucide-react";
 import type { Sort } from "../lib/filters";
@@ -12,7 +10,8 @@ const LABELS: Record<Sort, string> = {
 };
 
 /**
- * Ordenação por formulário GET: troca a URL ao escolher (com JS) ou pelo botão (sem JS).
+ * Ordenação por formulário GET com botão "Ordenar" visível. Não envia no `change`: navegar
+ * pelas opções com as setas do teclado não pode mudar de página (WCAG 3.2.2).
  * `hidden` leva os demais filtros da URL, já normalizados.
  */
 export function SortSelect({
@@ -42,7 +41,6 @@ export function SortSelect({
           id="ordem"
           name="ordem"
           defaultValue={value}
-          onChange={(event) => event.currentTarget.form?.requestSubmit()}
           className="h-10 appearance-none rounded-[var(--radius)] border border-ks-muted bg-ks-surface pl-3 pr-9 text-sm text-ks-fg"
         >
           {options.map((sort) => (
@@ -56,11 +54,9 @@ export function SortSelect({
           className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-ks-muted"
         />
       </div>
-      <noscript>
-        <Button type="submit" variant="secondary">
-          Ordenar
-        </Button>
-      </noscript>
+      <Button type="submit" variant="secondary">
+        Ordenar
+      </Button>
     </form>
   );
 }

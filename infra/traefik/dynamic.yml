@@ -1,5 +1,6 @@
 # Rotas do gateway api.katoshop.localhost (os prefixos /identity e /catalog são
-# removidos antes de chegar aos serviços) e da loja em katoshop.localhost.
+# removidos antes de chegar aos serviços), da loja em katoshop.localhost e do painel em
+# admin.katoshop.localhost.
 http:
   routers:
     # Só endpoints de credencial (R15). Refresh e logout ficam de fora: os BFFs do Next
@@ -44,6 +45,20 @@ http:
       service: storefront
       priority: 100
 
+    # R20 no painel: o login de funcionário também sai do container do admin para o identity.
+    admin-auth:
+      rule: "Host(`admin.katoshop.localhost`) && Method(`POST`) && Path(`/entrar`)"
+      entryPoints: [web]
+      middlewares: [auth-ratelimit]
+      service: admin
+      priority: 200
+
+    admin:
+      rule: "Host(`admin.katoshop.localhost`)"
+      entryPoints: [web]
+      service: admin
+      priority: 100
+
   middlewares:
     identity-strip:
       stripPrefix:
@@ -53,7 +68,7 @@ http:
       stripPrefix:
         prefixes: ["/catalog"]
 
-    # Login, login de staff e cadastro (gateway e formulários da loja): 10 req/s em média,
+    # Login, login de staff e cadastro (gateway e formulários da loja e do painel): 10 req/s em média,
     # rajada de 20, por IP de origem. O Traefik instancia o balde por router.
     auth-ratelimit:
       rateLimit:
@@ -84,3 +99,8 @@ http:
       loadBalancer:
         servers:
           - url: "http://storefront:3000"
+
+    admin:
+      loadBalancer:
+        servers:
+          - url: "http://admin:3000"

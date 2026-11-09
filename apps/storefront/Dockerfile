@@ -6,6 +6,9 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages packages
 COPY apps/storefront apps/storefront
+# defesa extra além do .dockerignore: o standalone copiaria qualquer .env carregado para a imagem
+RUN found="$(find apps/storefront packages -name '.env*' ! -name '.env.example' -not -path '*/node_modules/*')"; \
+    if [ -n "$found" ]; then echo "arquivo .env no contexto de build: $found" >&2; exit 1; fi
 RUN pnpm install --frozen-lockfile --filter @katoshop/storefront...
 RUN pnpm --filter @katoshop/storefront build
 

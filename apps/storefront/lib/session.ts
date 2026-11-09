@@ -1,3 +1,4 @@
+import "server-only";
 import { createSession, type SessionOptions } from "@katoshop/api-client/session";
 import { cookies } from "next/headers";
 import { apiUrl } from "./env";

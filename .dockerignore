@@ -7,7 +7,9 @@
 .venv
 .git
 .superpowers
-.env
+# arquivos de ambiente nunca entram na imagem (o standalone do Next copia os .env carregados)
+**/.env*
+!**/.env.example
 infra/secrets
 test-results
 playwright-report

@@ -182,13 +182,39 @@ describe("logoutAction", () => {
 });
 
 describe("GET /sair (Route Handler: cookies graváveis, R18)", () => {
-  function get(query = "") {
+  function get(query = "", headers: Record<string, string> = {}) {
     return signOutRoute(
-      new Request(`http://admin.katoshop.localhost/sair${query}`) as Parameters<
+      new Request(`http://admin.katoshop.localhost/sair${query}`, { headers }) as Parameters<
         typeof signOutRoute
       >[0],
     );
   }
+
+  it.each(["same-origin", "none"])(
+    "navegação %s (redirect do próprio painel ou URL digitada) encerra a sessão",
+    async (site) => {
+      mocks.getRefreshToken.mockResolvedValue("rt");
+      mocks.post.mockResolvedValue(ok(undefined, 204));
+
+      const url = await redirectOf(get("?erro=acesso", { "sec-fetch-site": site }));
+
+      expect(mocks.clear).toHaveBeenCalled();
+      expect(url).toBe("/entrar?erro=acesso");
+    },
+  );
+
+  it.each(["cross-site", "same-site"])(
+    "navegação %s só redireciona, sem deslogar (logout CSRF)",
+    async (site) => {
+      mocks.getRefreshToken.mockResolvedValue("rt");
+
+      const url = await redirectOf(get("?erro=acesso", { "sec-fetch-site": site }));
+
+      expect(mocks.post).not.toHaveBeenCalled();
+      expect(mocks.clear).not.toHaveBeenCalled();
+      expect(url).toBe("/entrar");
+    },
+  );
 
   it("conta sem acesso: revoga, limpa a sessão e mostra o aviso no login", async () => {
     mocks.getRefreshToken.mockResolvedValue("rt");

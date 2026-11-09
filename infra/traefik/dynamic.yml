@@ -27,6 +27,17 @@ http:
       service: catalog
       priority: 100
 
+    # R20: login e cadastro chegam ao identity pelo IP do container da loja, então o limite
+    # por IP do gateway virou um balde global. Aqui o limite volta a ser por cliente.
+    storefront-auth:
+      rule: >-
+        Host(`katoshop.localhost`) && Method(`POST`)
+        && (Path(`/entrar`) || Path(`/criar-conta`))
+      entryPoints: [web]
+      middlewares: [auth-ratelimit]
+      service: storefront
+      priority: 200
+
     storefront:
       rule: "Host(`katoshop.localhost`)"
       entryPoints: [web]
@@ -42,7 +53,8 @@ http:
       stripPrefix:
         prefixes: ["/catalog"]
 
-    # Login, login de staff e cadastro: 10 req/s em média, rajada de 20, por IP de origem.
+    # Login, login de staff e cadastro (gateway e formulários da loja): 10 req/s em média,
+    # rajada de 20, por IP de origem. O Traefik instancia o balde por router.
     auth-ratelimit:
       rateLimit:
         average: 10

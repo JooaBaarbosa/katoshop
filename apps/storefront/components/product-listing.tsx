@@ -22,6 +22,10 @@ export async function ProductListing({
     listProducts(scope, filters),
     productFacets(scope, filters),
   ]);
+  // R22 (spec 8.7): queda do catálogo cai na página de erro da marca; só filtro inválido fica inline.
+  if (!result.ok && result.reason !== "invalid") {
+    throw new Error(`Catálogo ${result.reason} ao carregar a listagem`);
+  }
   const search = toSearchParams(filters);
   const hiddenForSort = [...search].filter(([name]) => name !== "ordem");
 
@@ -47,11 +51,6 @@ export async function ProductListing({
           {!result.ok && result.reason === "invalid" && (
             <p role="alert" className="rounded-[var(--radius)] border border-ks-border p-4 text-sm">
               Filtro inválido. Revise os filtros ou limpe a busca para ver as peças.
-            </p>
-          )}
-          {!result.ok && result.reason !== "invalid" && (
-            <p role="alert" className="rounded-[var(--radius)] border border-ks-border p-4 text-sm">
-              Não foi possível carregar as peças agora. Tente de novo em instantes.
             </p>
           )}
           {result.ok && result.data.items.length === 0 && (

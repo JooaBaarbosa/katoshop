@@ -2,3 +2,33 @@
 
 /* classes usadas pelos componentes compartilhados */
 @source "../../../packages/ui/src";
+
+/* texto longo das páginas legais (Markdown renderizado no servidor) */
+.legal-text {
+  max-width: 65ch;
+  line-height: 1.7;
+}
+.legal-text h2 {
+  margin-top: 2.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.5rem;
+}
+.legal-text p,
+.legal-text ul {
+  margin-bottom: 1rem;
+}
+.legal-text ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.legal-text blockquote {
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--ks-border);
+  border-left: 4px solid var(--ks-focus);
+  background: var(--ks-surface);
+  padding: 0.75rem 1rem;
+}
+.legal-text a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

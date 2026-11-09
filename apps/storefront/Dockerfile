@@ -21,6 +21,7 @@ WORKDIR /app
 # saída standalone: server.js em apps/storefront, dependências rastreadas na raiz
 COPY --from=build --chown=node:node /repo/apps/storefront/.next/standalone ./
 COPY --from=build --chown=node:node /repo/apps/storefront/.next/static ./apps/storefront/.next/static
+COPY --from=build --chown=node:node /repo/apps/storefront/public ./apps/storefront/public
 USER node
 EXPOSE 3000
 CMD ["node", "apps/storefront/server.js"]

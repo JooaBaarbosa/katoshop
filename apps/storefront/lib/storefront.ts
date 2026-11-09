@@ -13,6 +13,7 @@ export type StorefrontSettings = Schemas["StorefrontSettings"];
 export type ProductCard = Schemas["ProductCardOut"];
 export type ProductCardPage = Schemas["ProductCardPage"];
 export type Facets = Schemas["FacetsOut"];
+export type PhotoCredit = Schemas["CreditOut"];
 
 /** Resultado de uma chamada ao catálogo que a página precisa distinguir. */
 export type Fetched<T> =
@@ -205,6 +206,17 @@ export async function allProductSlugs(): Promise<string[]> {
     cursor = result.data.next_cursor;
   }
   return slugs;
+}
+
+/** Créditos das fotos dos produtos. Falha do catálogo é `unavailable`, nunca lista vazia. */
+export async function photoCredits(): Promise<Fetched<PhotoCredit[]>> {
+  return fetched(async (signal) => {
+    const { data, response } = await catalog().GET("/v1/credits", {
+      fetch: revalidate(REVALIDATE_SECONDS),
+      signal,
+    });
+    return { data: data?.items, response };
+  });
 }
 
 /** URL pública de um arquivo do catálogo (hero da home). */

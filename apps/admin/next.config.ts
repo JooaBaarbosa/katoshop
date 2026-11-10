@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   turbopack: { root: repoRoot },
   transpilePackages: ["@katoshop/ui", "@katoshop/api-client"],
   poweredByHeader: false,
+  experimental: {
+    // upload de fotos: uma foto por action, até 8 MB na API mais a folga do multipart
+    // (o proxy.ts bufferiza até 10 MB por padrão, acima deste limite)
+    serverActions: { bodySizeLimit: "9mb" },
+  },
   images: {
     // Fotos servidas pelo catálogo através do gateway. Dentro do compose o host resolve para o
     // Traefik pelo alias de rede; fora dele, para o loopback.

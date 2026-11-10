@@ -2,8 +2,10 @@
   "name": "katoshop",
   "private": true,
   "license": "MIT",
-  "packageManager": "pnpm@12.15.0",
-  "engines": { "node": ">=24" },
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev:up": "uv run python scripts/gen_keys.py && docker compose up -d --build",
     "dev:down": "docker compose --profile \"*\" down",

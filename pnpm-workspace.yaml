@@ -5,17 +5,39 @@ packages:
 allowBuilds:
   unrs-resolver: false
 minimumReleaseAgeExclude:
-  - '@typescript-eslint/eslint-plugin@8.72.1'
-  - '@typescript-eslint/parser@8.72.1'
-  - '@typescript-eslint/project-service@8.72.1'
-  - '@typescript-eslint/scope-manager@8.72.1'
-  - '@typescript-eslint/tsconfig-utils@8.72.1'
-  - '@typescript-eslint/type-utils@8.72.1'
-  - '@typescript-eslint/types@8.72.1'
-  - '@typescript-eslint/typescript-estree@8.72.1'
-  - '@typescript-eslint/utils@8.72.1'
-  - '@typescript-eslint/visitor-keys@8.72.1'
-  - typescript-eslint@8.72.1
+  - '@typescript-eslint/eslint-plugin@8.72.2'
+  - '@typescript-eslint/parser@8.72.2'
+  - '@typescript-eslint/project-service@8.72.2'
+  - '@typescript-eslint/scope-manager@8.72.2'
+  - '@typescript-eslint/tsconfig-utils@8.72.2'
+  - '@typescript-eslint/type-utils@8.72.2'
+  - '@typescript-eslint/types@8.72.2'
+  - '@typescript-eslint/typescript-estree@8.72.2'
+  - '@typescript-eslint/utils@8.72.2'
+  - '@typescript-eslint/visitor-keys@8.72.2'
+  - typescript-eslint@8.72.2
+  - '@next/env@16.4.6'
+  - '@next/eslint-plugin-next@16.4.6'
+  - '@next/swc-darwin-arm64@16.4.6'
+  - '@next/swc-darwin-x64@16.4.6'
+  - '@next/swc-linux-arm64-gnu@16.4.6'
+  - '@next/swc-linux-arm64-musl@16.4.6'
+  - '@next/swc-linux-x64-gnu@16.4.6'
+  - '@next/swc-linux-x64-musl@16.4.6'
+  - '@next/swc-win32-arm64-msvc@16.4.6'
+  - '@next/swc-win32-x64-msvc@16.4.6'
+  - '@opentelemetry/api-logs@0.223.1'
+  - '@opentelemetry/core@2.12.1'
+  - '@opentelemetry/instrumentation@0.223.1'
+  - '@opentelemetry/resources@2.12.1'
+  - '@opentelemetry/sdk-logs@0.223.1'
+  - '@opentelemetry/sdk-metrics@2.12.1'
+  - '@opentelemetry/sdk-trace-base@2.12.1'
+  - '@opentelemetry/sdk-trace@2.12.1'
+  - eslint-config-next@16.4.6
+  - lucide-react@1.71.0
+  - marked@18.2.0
+  - next@16.4.6
 # Uma única @opentelemetry/api no workspace: o next a recebe como peer opcional e versões
 # diferentes geram duas cópias do next (tipos NextRequest/NextResponse incompatíveis entre a app
 # e o @katoshop/api-client). 1.9.x é a última aceita pelos SDKs 2.x exigidos pelo @vercel/otel.

@@ -31,6 +31,14 @@ def _forbidden(detail: str) -> ProblemError:
     return ProblemError(403, "auth.forbidden", "Acesso negado", detail)
 
 
+def _insufficient_permission(perm: str) -> ProblemError:
+    # R25: código próprio para que o cliente separe falta de permissão (mantém a sessão) de
+    # token emitido para outra audiência (auth.forbidden, R1: encerra a sessão)
+    return ProblemError(
+        403, "auth.insufficient_permission", "Permissão insuficiente", f"Requer {perm}."
+    )
+
+
 @dataclass(frozen=True)
 class Principal:
     user_id: uuid.UUID
@@ -206,7 +214,7 @@ def require_permission(perm: str, audience: str = "admin") -> Callable[..., Awai
         principal: Principal = Depends(require_audience(audience)),  # noqa: B008
     ) -> Principal:
         if not principal.has_permission(perm):
-            raise _forbidden("Permissão insuficiente.")
+            raise _insufficient_permission(perm)
         return principal
 
     return dependency

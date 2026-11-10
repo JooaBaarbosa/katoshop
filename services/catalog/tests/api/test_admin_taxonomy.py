@@ -186,7 +186,7 @@ async def test_staff_without_permission_403(
         headers={"Authorization": f"Bearer {staff_without_roles_token}"},
     )
     assert response.status_code == 403
-    assert response.json()["code"] == "auth.forbidden"
+    assert response.json()["code"] == "auth.insufficient_permission"
 
 
 async def test_no_token_401(client: httpx.AsyncClient) -> None:

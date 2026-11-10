@@ -343,7 +343,8 @@ async def test_customer_role_lacks_permission() -> None:
     signer = Signer()
     resp = await _call(_app(signer), "POST", "/things", _bearer(signer.token(roles=[])))
     assert resp.status_code == 403
-    assert resp.json()["code"] == "auth.forbidden"
+    # R25: falta de permissão tem código próprio; audiência errada continua auth.forbidden
+    assert resp.json()["code"] == "auth.insufficient_permission"
 
 
 async def test_admin_role_has_permission() -> None:

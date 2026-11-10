@@ -16,7 +16,7 @@ dev = [
 default-groups = ["dev"]
 
 [tool.uv.workspace]
-members = ["libs/py/platform", "services/*"]
+members = ["libs/py/platform", "services/*", "scripts/seed"]
 
 [tool.uv.sources]
 katoshop-platform = { workspace = true }
@@ -37,4 +37,4 @@ include = ["libs", "services"]
 exclude = ["**/.venv", "**/node_modules"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ks_platform", "identity", "catalog"]
+known-first-party = ["ks_platform", "identity", "catalog", "seed"]

@@ -8,6 +8,7 @@ members = [
     "identity",
     "katoshop",
     "katoshop-platform",
+    "katoshop-seed",
 ]
 
 [[package]]
@@ -691,6 +692,17 @@ provides-extras = ["testing"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "katoshop-platform", extras = ["testing"], editable = "libs/py/platform" }]
+
+[[package]]
+name = "katoshop-seed"
+version = "0.1.0"
+source = { virtual = "scripts/seed" }
+dependencies = [
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "httpx", specifier = "==0.28.1" }]
 
 [[package]]
 name = "mako"

@@ -12,3 +12,4 @@ playwright-report/
 media-data/
 .coverage
 htmlcov/
+scripts/seed/.cache/

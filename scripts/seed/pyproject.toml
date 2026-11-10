@@ -1,0 +1,18 @@
+[project]
+name = "katoshop-seed"
+version = "0.1.0"
+description = "Seed idempotente da loja demo KatoShop (catálogo, fotos creditadas e vitrine)"
+requires-python = ">=3.15,<3.16"
+dependencies = [
+    "httpx==0.28.1",
+]
+
+[tool.uv]
+# Script executável (python -m seed a partir de scripts/), não um pacote instalável.
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# o pytest-asyncio do venv da raiz avisa sem esta opção (e avisos viram erro)
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error"]

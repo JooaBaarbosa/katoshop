@@ -156,6 +156,29 @@ services:
           - katoshop.localhost
           - admin.katoshop.localhost
 
+  # Seed da loja demo (idempotente): pnpm seed. Fora do perfil padrão do dev:up.
+  seed:
+    profiles: [seed]
+    build:
+      context: ..
+      dockerfile: scripts/seed/Dockerfile
+    image: katoshop/seed:dev
+    mem_limit: 128m
+    environment:
+      # o alias de rede do Traefik resolve o gateway de dentro do container
+      API_URL: http://api.katoshop.localhost
+      SEED_ADMIN_EMAIL: ${IDENTITY_BOOTSTRAP_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${IDENTITY_BOOTSTRAP_ADMIN_PASSWORD}
+    depends_on:
+      identity:
+        condition: service_healthy
+      catalog:
+        condition: service_healthy
+      traefik:
+        condition: service_started
+    volumes:
+      - seed-cache:/app/scripts/seed/.cache
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.165.0
     profiles: [observability]
@@ -223,3 +246,4 @@ volumes:
   media-data:
   prometheus-data:
   grafana-data:
+  seed-cache:

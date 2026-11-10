@@ -1,0 +1,419 @@
+[
+  {
+    "id": "unsplash-3qqiMT2LdR8",
+    "source_url": "https://unsplash.com/photos/3qqiMT2LdR8",
+    "download_url": "https://images.unsplash.com/photo-1571455786673-9d9d6c194f90?w=1600&q=80&fm=jpg",
+    "author": "Luis Quintero",
+    "license": "Unsplash License",
+    "sha256": "e6b12d270ed23e93f8dec6232de6f39e7740d2b613e318709975f0a996f3835c",
+    "alt": "Homem vestindo camiseta preta lisa de gola careca, enquadrada do peito para baixo",
+    "used_by": [
+      "camiseta-pesada-preta"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-WWesmHEgXDs",
+    "source_url": "https://unsplash.com/photos/WWesmHEgXDs",
+    "download_url": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=1600&q=80&fm=jpg",
+    "author": "Anomaly",
+    "license": "Unsplash License",
+    "sha256": "0a6f8d3fc1eabe9e3b72797ba27153699d12670889a12eed9de85ad1fb542006",
+    "alt": "Homem vestindo camiseta branca lisa de gola careca diante de prateleiras com plantas",
+    "used_by": [
+      "camiseta-pesada-branca"
+    ],
+    "color_code": "BRC"
+  },
+  {
+    "id": "unsplash-acn5ERAeSb4",
+    "source_url": "https://unsplash.com/photos/acn5ERAeSb4",
+    "download_url": "https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=1600&q=80&fm=jpg",
+    "author": "Haryo Setyadi",
+    "license": "Unsplash License",
+    "sha256": "b6631378f1f9f2985523802ea0f9734de9a731ab90ef4d0f7a815a8799202071",
+    "alt": "Camiseta branca lisa pendurada em cabide diante de parede de concreto",
+    "used_by": [
+      "camiseta-pesada-branca"
+    ],
+    "color_code": "BRC"
+  },
+  {
+    "id": "unsplash-QPO2KWB-SLw",
+    "source_url": "https://unsplash.com/photos/QPO2KWB-SLw",
+    "download_url": "https://images.unsplash.com/photo-1694870115097-dc0ec53a9fb3?w=1600&q=80&fm=jpg",
+    "author": "Artem Balashevsky",
+    "license": "Unsplash License",
+    "sha256": "c387241abc6946ed910779cab165879a15c5fa16ddd23be2ab98bdadd29c017d",
+    "alt": "Homem de camiseta e bermuda de moletom off-white em calçada ensolarada",
+    "used_by": [
+      "camiseta-basica-off-white",
+      "bermuda-moletom"
+    ],
+    "color_code": "OFW"
+  },
+  {
+    "id": "unsplash-zneickOATGk",
+    "source_url": "https://unsplash.com/photos/zneickOATGk",
+    "download_url": "https://images.unsplash.com/photo-1666358777322-a25eda95848f?w=1600&q=80&fm=jpg",
+    "author": "Or Hakim",
+    "license": "Unsplash License",
+    "sha256": "99e1a68cdfb859cb22e3b0494785a9465e3b469a28b30118ceb5a9eaec7b5f2a",
+    "alt": "Homem vestindo camiseta preta longline com barra arredondada e calça clara",
+    "used_by": [
+      "camiseta-longline-preta"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-Cs4GVbMqKGY",
+    "source_url": "https://unsplash.com/photos/Cs4GVbMqKGY",
+    "download_url": "https://images.unsplash.com/photo-1610502778270-c5c6f4c7d575?w=1600&q=80&fm=jpg",
+    "author": "Ryan Hoffman",
+    "license": "Unsplash License",
+    "sha256": "066293bd8e8fd98f4707221de396ca9805431c573ec32b2850c8e0d06b59b15d",
+    "alt": "Três camisetas pretas lisas em cabides, duas de manga longa e uma de manga curta",
+    "used_by": [
+      "camiseta-manga-longa-preta"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-pYDQyzThtLE",
+    "source_url": "https://unsplash.com/photos/pYDQyzThtLE",
+    "download_url": "https://images.unsplash.com/photo-1726140872004-850c80900ae3?w=1600&q=80&fm=jpg",
+    "author": "Tim Bernhard",
+    "license": "Unsplash License",
+    "sha256": "fe717d50744ab00d2a5ed0284d8d18cf8f4aeb7b1f30cd88aeff9aa39e88a82d",
+    "alt": "Rapaz de camiseta preta ampla caminhando por uma rua",
+    "used_by": [
+      "camiseta-oversized-preta"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-lETfyhB8g4Q",
+    "source_url": "https://unsplash.com/photos/lETfyhB8g4Q",
+    "download_url": "https://images.unsplash.com/photo-1673092147872-5ddb03194341?w=1600&q=80&fm=jpg",
+    "author": "Rafay Ansari",
+    "license": "Unsplash License",
+    "sha256": "f9b50b201be5b3f15ad78c912f30f11a962d5983f93cfabf3d5737c82bfcf4ca",
+    "alt": "Homem de moletom preto com capuz e bolso canguru encostado em parede de tijolos",
+    "used_by": [
+      "moletom-canguru-pesado"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-E3NUmCScugo",
+    "source_url": "https://unsplash.com/photos/E3NUmCScugo",
+    "download_url": "https://images.unsplash.com/photo-1513789181297-6f2ec112c0bc?w=1600&q=80&fm=jpg",
+    "author": "JC Gellidon",
+    "license": "Unsplash License",
+    "sha256": "80e54a47294d5c1a25217783176e6023d0c83a4ccaf72c315b0e090ba23e83ac",
+    "alt": "Pessoa de moletom preto com capuz cobrindo parte do rosto diante de uma persiana",
+    "used_by": [
+      "moletom-canguru-pesado"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-a_KC8ocB650",
+    "source_url": "https://unsplash.com/photos/a_KC8ocB650",
+    "download_url": "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=1600&q=80&fm=jpg",
+    "author": "Jannes Jacobs",
+    "license": "Unsplash License",
+    "sha256": "27fff39068fe95e491db8c75722a7ce4f06b715b9d87274a5b7f1295b47cd765",
+    "alt": "Pessoa de costas vestindo moletom cinza mescla com capuz ao ar livre",
+    "used_by": [
+      "moletom-canguru-pesado"
+    ],
+    "color_code": "CNZ"
+  },
+  {
+    "id": "unsplash-1Mszk3-0KbM",
+    "source_url": "https://unsplash.com/photos/1Mszk3-0KbM",
+    "download_url": "https://images.unsplash.com/photo-1565740392966-48c5886d8054?w=1600&q=80&fm=jpg",
+    "author": "Agustin Fernandez",
+    "license": "Unsplash License",
+    "sha256": "5fab0d88451bd320f04c903f0d5c302d5edd24eb143afc550c3d51a85f59c8b3",
+    "alt": "Pessoa de moletom cinza mescla com capuz olhando para baixo ao lado de um poste",
+    "used_by": [
+      "moletom-canguru-pesado"
+    ],
+    "color_code": "CNZ"
+  },
+  {
+    "id": "unsplash-xqhif3j_SAg",
+    "source_url": "https://unsplash.com/photos/xqhif3j_SAg",
+    "download_url": "https://images.unsplash.com/photo-1757495404191-e94ed7e70046?w=1600&q=80&fm=jpg",
+    "author": "Dev Benjamin",
+    "license": "Unsplash License",
+    "sha256": "b2b7670042d5a19fbf02a4f3767fb743c25fdc4281a5edf791085e5c38183d58",
+    "alt": "Mulher de moletom preto oversized com capuz e bolso canguru sob o céu claro",
+    "used_by": [
+      "moletom-canguru-oversized-preto"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-s9q_bn-uLhg",
+    "source_url": "https://unsplash.com/photos/s9q_bn-uLhg",
+    "download_url": "https://images.unsplash.com/photo-1565978771542-0db9ab9ad3de?w=1600&q=80&fm=jpg",
+    "author": "The Ian",
+    "license": "Unsplash License",
+    "sha256": "e2cab3991d2b1d675e4daa68ebf21e1214b55ee3734a2138263af309587b30d6",
+    "alt": "Pessoa de moletom verde com capuz cobrindo o rosto no meio de uma rua movimentada",
+    "used_by": [
+      "moletom-canguru-verde-musgo"
+    ],
+    "color_code": "VRD"
+  },
+  {
+    "id": "unsplash-D86EPYMO6iE",
+    "source_url": "https://unsplash.com/photos/D86EPYMO6iE",
+    "download_url": "https://images.unsplash.com/photo-1580079906050-84bb132e4c4f?w=1600&q=80&fm=jpg",
+    "author": "Sebastian Pociecha",
+    "license": "Unsplash License",
+    "sha256": "f349e3e8187288da231363478059186ee75930320e50d7638890fdfc80f0cfec",
+    "alt": "Homem de moletom verde com capuz e boné encostado em parede de tijolos brancos",
+    "used_by": [
+      "moletom-canguru-verde-musgo"
+    ],
+    "color_code": "VRD"
+  },
+  {
+    "id": "unsplash-VoP2WK9rTa4",
+    "source_url": "https://unsplash.com/photos/VoP2WK9rTa4",
+    "download_url": "https://images.unsplash.com/photo-1688111421205-a0a85415b224?w=1600&q=80&fm=jpg",
+    "author": "Abraham Flores",
+    "license": "Unsplash License",
+    "sha256": "4c06388141986ab33c2df0b5c08e8d7b60b8ae60e30823d3fda89e4a077e4923",
+    "alt": "Homem de moletom off-white com capuz segurando a gola ao ar livre",
+    "used_by": [
+      "moletom-canguru-off-white"
+    ],
+    "color_code": "OFW"
+  },
+  {
+    "id": "unsplash-EIOmriN64sU",
+    "source_url": "https://unsplash.com/photos/EIOmriN64sU",
+    "download_url": "https://images.unsplash.com/photo-1649114383220-c4f0f0dbafbe?w=1600&q=80&fm=jpg",
+    "author": "Caleb",
+    "license": "Unsplash License",
+    "sha256": "e7c264e0822560dd4888e417b2efeff4189784fac23ee7b957fd66f94887045c",
+    "alt": "Homem em uma rua de Nova York com moletom off-white de gola careca e calça cargo preta, cercado por vapor",
+    "used_by": [
+      "moletom-gola-careca-off-white",
+      "calca-cargo-preta"
+    ]
+  },
+  {
+    "id": "unsplash-7cERndkOyDw",
+    "source_url": "https://unsplash.com/photos/7cERndkOyDw",
+    "download_url": "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=1600&q=80&fm=jpg",
+    "author": "Mediamodifier",
+    "license": "Unsplash License",
+    "sha256": "3e0a25c144d71f25d473fa3e654b7dda2bcaf5e3128f347e10862d29e2d49830",
+    "alt": "Moletom branco de gola careca estendido sobre mesa clara ao lado de tênis brancos",
+    "used_by": [
+      "moletom-gola-careca-branco"
+    ],
+    "color_code": "BRC"
+  },
+  {
+    "id": "unsplash-d5GlpSOAzzg",
+    "source_url": "https://unsplash.com/photos/d5GlpSOAzzg",
+    "download_url": "https://images.unsplash.com/photo-1548883354-7622d03aca27?w=1600&q=80&fm=jpg",
+    "author": "Kyle Loftus",
+    "license": "Unsplash License",
+    "sha256": "0a630e1f8ed9e7b31ada7f94b724bd6b60b7cef4f0d6b47e1ea66f40cb436e32",
+    "alt": "Detalhe de calça cargo preta com bolsos laterais nas pernas",
+    "used_by": [
+      "calca-cargo-preta"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-5NPdRwt7BsQ",
+    "source_url": "https://unsplash.com/photos/5NPdRwt7BsQ",
+    "download_url": "https://images.unsplash.com/photo-1511794322962-129ddbd0af38?w=1600&q=80&fm=jpg",
+    "author": "Miguel Carraça",
+    "license": "Unsplash License",
+    "sha256": "ce4ce6814b8d4d3f338cdf8e3ae3a5e2e703a195aa98fea83fcca2b97751a361",
+    "alt": "Pernas de pessoa sentada vestindo calça cargo marrom diante de montanhas",
+    "used_by": [
+      "calca-cargo-marrom"
+    ],
+    "color_code": "MRR"
+  },
+  {
+    "id": "unsplash-ZpKpUPIHZA0",
+    "source_url": "https://unsplash.com/photos/ZpKpUPIHZA0",
+    "download_url": "https://images.unsplash.com/photo-1789110519894-e56e4db1f0c1?w=1600&q=80&fm=jpg",
+    "author": "engin akyurt",
+    "license": "Unsplash License",
+    "sha256": "56a2675d26b185c17d969d62c1c7004bcaa00cac5cee394661a9b7df5e6a516c",
+    "alt": "Mulher de costas vestindo calça jogger de moletom preta com punho no tornozelo",
+    "used_by": [
+      "calca-jogger-moletom"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-y2WnRJssfZw",
+    "source_url": "https://unsplash.com/photos/y2WnRJssfZw",
+    "download_url": "https://images.unsplash.com/photo-1789110519766-117eb0e35bea?w=1600&q=80&fm=jpg",
+    "author": "engin akyurt",
+    "license": "Unsplash License",
+    "sha256": "ceade4b26db200468669b8ac48d20d987e03dd1245edd14ec5e516ef399e983c",
+    "alt": "Mulher de costas vestindo calça jogger de moletom cinza mescla com punho no tornozelo",
+    "used_by": [
+      "calca-jogger-moletom"
+    ],
+    "color_code": "CNZ"
+  },
+  {
+    "id": "unsplash-Tkxd7yU2a5M",
+    "source_url": "https://unsplash.com/photos/Tkxd7yU2a5M",
+    "download_url": "https://images.unsplash.com/photo-1779675789087-ca737ecf175a?w=1600&q=80&fm=jpg",
+    "author": "ola szkolda",
+    "license": "Unsplash License",
+    "sha256": "384d9a460d48c81a9882e8e0c9ab64518891f3676ab9546cafc2454e0bdc1c96",
+    "alt": "Mulher com conjunto de moletom cinza claro e calça de perna larga em uma sala retrô",
+    "used_by": [
+      "calca-moletom-wide-cinza"
+    ],
+    "color_code": "CNZ"
+  },
+  {
+    "id": "unsplash-h1lEJgfQfig",
+    "source_url": "https://unsplash.com/photos/h1lEJgfQfig",
+    "download_url": "https://images.unsplash.com/photo-1789110520388-ebea45c8bbbb?w=1600&q=80&fm=jpg",
+    "author": "engin akyurt",
+    "license": "Unsplash License",
+    "sha256": "dbe6ff344bd215a72d09ed7fb9011f3bd0ad7b80dcf5f0a64c623ef9fbf4ee64",
+    "alt": "Bermuda de moletom cinza mescla com cós elástico, vestida com tênis claros",
+    "used_by": [
+      "bermuda-moletom"
+    ],
+    "color_code": "CNZ"
+  },
+  {
+    "id": "unsplash-kbZh26d-Ez0",
+    "source_url": "https://unsplash.com/photos/kbZh26d-Ez0",
+    "download_url": "https://images.unsplash.com/photo-1606453914790-b9be7cdb321f?w=1600&q=80&fm=jpg",
+    "author": "Spencer Quast",
+    "license": "Unsplash License",
+    "sha256": "4e8168f4764ff459042852cd37fdb0b70c38edbc80aa66f9fdc0f1394d1be18a",
+    "alt": "Homem usando gorro canelado preto com barra dobrada",
+    "used_by": [
+      "gorro-canelado"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-nN8QL12mIKY",
+    "source_url": "https://unsplash.com/photos/nN8QL12mIKY",
+    "download_url": "https://images.unsplash.com/photo-1771315655628-1f94975e6190?w=1600&q=80&fm=jpg",
+    "author": "Danial Dezfouli",
+    "license": "Unsplash License",
+    "sha256": "d32de69a7521b471f0c3256c88e8c4d9c237be1a7d3d2df5448cb713ae454160",
+    "alt": "Homem puxando um gorro canelado verde musgo sobre os olhos na rua",
+    "used_by": [
+      "gorro-canelado"
+    ],
+    "color_code": "VRD"
+  },
+  {
+    "id": "unsplash-2loKxdi6Hmo",
+    "source_url": "https://unsplash.com/photos/2loKxdi6Hmo",
+    "download_url": "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=1600&q=80&fm=jpg",
+    "author": "Yang Deng",
+    "license": "Unsplash License",
+    "sha256": "1617b03630d471f9f94a5a2437acc28b5efbc68d9b880db58e775321587aa014",
+    "alt": "Boné de algodão lavado cinza sobre superfície branca",
+    "used_by": [
+      "bone-lavado-cinza"
+    ],
+    "color_code": "CNZ"
+  },
+  {
+    "id": "unsplash-t8HiP3e5abg",
+    "source_url": "https://unsplash.com/photos/t8HiP3e5abg",
+    "download_url": "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=1600&q=80&fm=jpg",
+    "author": "Mediamodifier",
+    "license": "Unsplash License",
+    "sha256": "51fdc4164c2abecda222ef702cbd123715c1c608c86a599b546b74f709f8afca",
+    "alt": "Boné trucker branco com tela traseira sobre fundo claro",
+    "used_by": [
+      "bone-trucker-branco"
+    ],
+    "color_code": "BRC"
+  },
+  {
+    "id": "unsplash-T3A-depWto8",
+    "source_url": "https://unsplash.com/photos/T3A-depWto8",
+    "download_url": "https://images.unsplash.com/photo-1773837463640-e615246f7fa4?w=1600&q=80&fm=jpg",
+    "author": "Ryan Hughes",
+    "license": "Unsplash License",
+    "sha256": "57a453d099c017f58b79554c81623a62e374e4cba1b2d5b889a15f47fc5fe4b2",
+    "alt": "Pé vestindo meia branca de algodão",
+    "used_by": [
+      "meia-cano-medio-branca"
+    ],
+    "color_code": "BRC"
+  },
+  {
+    "id": "unsplash-90kNrvWerXs",
+    "source_url": "https://unsplash.com/photos/90kNrvWerXs",
+    "download_url": "https://images.unsplash.com/photo-1730447153639-f559d50a91ec?w=1600&q=80&fm=jpg",
+    "author": "Anna Evans",
+    "license": "Unsplash License",
+    "sha256": "d2a0787ad3177be859cb402afbd3b31f14f62eeed1898e82d6d63f8716304f40",
+    "alt": "Par de meias caneladas cinza mescla sobre tecido preto ao lado de tênis brancos",
+    "used_by": [
+      "meia-canelada-cinza"
+    ],
+    "color_code": "CNZ"
+  },
+  {
+    "id": "unsplash-LW2iqpHzr8Y",
+    "source_url": "https://unsplash.com/photos/LW2iqpHzr8Y",
+    "download_url": "https://images.unsplash.com/photo-1620786514684-ff35b5aae55e?w=1600&q=80&fm=jpg",
+    "author": "Maryam Nemati",
+    "license": "Unsplash License",
+    "sha256": "1ddea3bc0f5e036d77d3ff4d48e2af411268d30b7bac46913081372ddfa368c1",
+    "alt": "Bolsa transversal preta com zíper e alça longa sobre fundo branco",
+    "used_by": [
+      "bolsa-transversal-preta"
+    ],
+    "color_code": "PRT"
+  },
+  {
+    "id": "unsplash-PENodSVsL1s",
+    "source_url": "https://unsplash.com/photos/PENodSVsL1s",
+    "download_url": "https://images.unsplash.com/photo-1630381260512-e3fe55c11973?w=1600&q=80&fm=jpg",
+    "author": "Mediamodifier",
+    "license": "Unsplash License",
+    "sha256": "4075ac3adb322cec3ffee2d36fdcb482a132bb11e219fd833735a1df55482651",
+    "alt": "Pessoa de calça jeans segurando uma ecobag de lona clara e lisa",
+    "used_by": [
+      "ecobag-lona-crua"
+    ],
+    "color_code": "OFW"
+  },
+  {
+    "id": "unsplash--zBSu3rYjNs",
+    "source_url": "https://unsplash.com/photos/-zBSu3rYjNs",
+    "download_url": "https://images.unsplash.com/photo-1535981444082-2a5dc0548ef3?w=1600&q=80&fm=jpg",
+    "author": "Mel Poole",
+    "license": "Unsplash License",
+    "sha256": "476ba1d93c3d6c218bbe8228a3f3e2639ab09ab072374473fb0cef39800629ce",
+    "alt": "Detalhe da alça e do tecido de uma ecobag de lona crua",
+    "used_by": [
+      "ecobag-lona-crua"
+    ],
+    "color_code": "OFW"
+  }
+]

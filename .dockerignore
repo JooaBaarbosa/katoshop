@@ -13,3 +13,4 @@
 infra/secrets
 test-results
 playwright-report
+scripts/seed/.cache

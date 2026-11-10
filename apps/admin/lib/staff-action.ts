@@ -1,11 +1,12 @@
 import "server-only";
 import { ApiProblem, unwrap } from "@katoshop/api-client";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { identity } from "./api";
+import { forbiddenKind, WRITE_FORBIDDEN } from "./forbidden";
 import { problemMessage } from "./problem-messages";
 import { session } from "./session";
 
-export const PERMISSION_DENIED = "Você não tem permissão para esta ação.";
+export const PERMISSION_DENIED = WRITE_FORBIDDEN;
 const NO_ACCESS = "/sair?erro=acesso";
 
 export type Failure = {
@@ -18,15 +19,6 @@ export type Outcome<T> = { ok: true; data: T } | Failure;
 
 class NotStaff extends Error {}
 
-/**
- * O catálogo usa o mesmo código `auth.forbidden` para audiência errada e para permissão
- * insuficiente (R1); só o detalhe os separa. Só a falta de permissão mantém a sessão: qualquer
- * outro 403 continua encerrando, como no guarda das páginas.
- */
-function isPermissionDenied(error: ApiProblem): boolean {
-  return error.code === "auth.forbidden" && error.message === "Permissão insuficiente.";
-}
-
 function fieldErrorsOf(error: ApiProblem): Record<string, string> | undefined {
   if (!error.errors) return undefined;
   const entries = Object.entries(error.errors).filter(([, items]) => items.length > 0);
@@ -38,7 +30,8 @@ function fieldErrorsOf(error: ApiProblem): Record<string, string> | undefined {
  * Toda Server Action do painel passa por aqui: confere de novo que a sessão é de funcionário
  * (a action é um endpoint POST público, não herda o guarda da página) com refresh habilitado
  * (R18) e converte falhas da API em mensagens. 401 vai ao login; conta sem acesso encerra a
- * sessão; falta de permissão numa escrita só mostra o aviso.
+ * sessão; falta de permissão numa escrita só mostra o aviso. redirect()/notFound() lançados
+ * dentro de `fn` sobem intactos para o Next.
  */
 export async function staffAction<T>(fn: (token: string) => Promise<T>): Promise<Outcome<T>> {
   try {
@@ -52,14 +45,17 @@ export async function staffAction<T>(fn: (token: string) => Promise<T>): Promise
     );
     return { ok: true, data };
   } catch (error) {
+    unstable_rethrow(error);
     if (error instanceof NotStaff) redirect(NO_ACCESS);
     if (error instanceof ApiProblem) {
       if (error.status === 401) redirect("/entrar");
-      if (error.status === 403) {
-        if (isPermissionDenied(error)) {
-          return { ok: false, code: error.code, error: PERMISSION_DENIED };
-        }
-        redirect(NO_ACCESS);
+      const forbidden = forbiddenKind(error);
+      if (forbidden === "permission") {
+        return { ok: false, code: error.code, error: PERMISSION_DENIED };
+      }
+      if (forbidden === "audience") redirect(NO_ACCESS);
+      if (error.status >= 500) {
+        console.error(`[staffAction] ${error.code} trace_id=${error.traceId ?? "-"}`, error);
       }
       const fieldErrors = fieldErrorsOf(error);
       return {
@@ -69,6 +65,7 @@ export async function staffAction<T>(fn: (token: string) => Promise<T>): Promise
         ...(fieldErrors ? { fieldErrors } : {}),
       };
     }
+    console.error("[staffAction] falha inesperada", error);
     return { ok: false, error: problemMessage(error) };
   }
 }

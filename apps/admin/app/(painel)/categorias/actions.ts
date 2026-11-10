@@ -7,6 +7,7 @@ import {
   failureState,
   field,
   optional,
+  slugPatch,
   type ActionResult,
   type ActionState,
 } from "../../../lib/action-state";
@@ -47,17 +48,22 @@ export async function saveCategoryAction(
       fieldErrors: { parent_id: "Uma categoria não pode ficar dentro dela mesma." },
     };
   }
-  const body = { name, slug: optional(formData, "slug"), parent_id: parentId, position };
+  const body = { name, parent_id: parentId, position };
   const result = await staffAction(async (token) => {
     const api = catalog(token);
     return id
       ? unwrap(
           await api.PATCH("/v1/admin/categories/{category_id}", {
             params: { path: { category_id: id } },
-            body,
+            // slug vazio na edição: mantém o atual (null não é aceito no PATCH)
+            body: { name, ...slugPatch(formData), parent_id: parentId, position },
           }),
         )
-      : unwrap(await api.POST("/v1/admin/categories", { body }));
+      : unwrap(
+          await api.POST("/v1/admin/categories", {
+            body: { ...body, slug: optional(formData, "slug") },
+          }),
+        );
   });
   if (!result.ok) return failureState(result, FIELD_BY_CODE);
   revalidatePath("/categorias");

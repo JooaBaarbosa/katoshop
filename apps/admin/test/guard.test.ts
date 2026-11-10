@@ -8,6 +8,8 @@ class RedirectSignal extends Error {
   }
 }
 
+class ForbiddenSignal extends Error {}
+
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   identity: vi.fn(),
@@ -15,9 +17,14 @@ const mocks = vi.hoisted(() => ({
   clear: vi.fn(),
 }));
 
-vi.mock("next/navigation", () => ({
+// o resto do módulo é o real: unstable_rethrow reconhece os erros internos do Next
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
   redirect: (url: string) => {
     throw new RedirectSignal(url);
+  },
+  forbidden: () => {
+    throw new ForbiddenSignal();
   },
 }));
 
@@ -119,11 +126,24 @@ describe("authed", () => {
     expect(await redirectOf(authed(() => Promise.resolve(1)))).toBe("/entrar");
   });
 
-  it("403 (sem permissão de catálogo) manda limpar a sessão", async () => {
+  it("403 auth.forbidden (audiência errada) manda limpar a sessão", async () => {
     mocks.withAuth.mockRejectedValue(
       new ApiProblem({ status: 403, code: "auth.forbidden", message: "Proibido" }),
     );
 
     expect(await redirectOf(authed(() => Promise.resolve(1)))).toBe("/sair?erro=acesso");
+  });
+
+  it("403 auth.insufficient_permission mostra a página de sem permissão, sem deslogar", async () => {
+    mocks.withAuth.mockRejectedValue(
+      new ApiProblem({
+        status: 403,
+        code: "auth.insufficient_permission",
+        message: "Requer catalog.write.",
+      }),
+    );
+
+    await expect(authed(() => Promise.resolve(1))).rejects.toBeInstanceOf(ForbiddenSignal);
+    expect(mocks.clear).not.toHaveBeenCalled();
   });
 });

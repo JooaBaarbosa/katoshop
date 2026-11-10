@@ -48,3 +48,12 @@ export function field(formData: FormData, name: string): string {
 export function optional(formData: FormData, name: string): string | null {
   return field(formData, name) || null;
 }
+
+/**
+ * Slug para PATCH: o schema de edição não aceita null, então campo vazio fica fora do corpo e o
+ * endereço atual é mantido. Espalhe o resultado no corpo: `{ ...slugPatch(formData) }`.
+ */
+export function slugPatch(formData: FormData): { slug?: string } {
+  const slug = field(formData, "slug");
+  return slug ? { slug } : {};
+}

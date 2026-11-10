@@ -8,6 +8,7 @@ import {
   failureState,
   field,
   optional,
+  slugPatch,
   type ActionResult,
   type ActionState,
 } from "../../../lib/action-state";
@@ -34,23 +35,23 @@ export async function saveCollectionAction(
   }
   if (Object.keys(fieldErrors).length > 0) return { ok: false, fieldErrors };
 
-  const body = {
-    name,
-    slug: optional(formData, "slug"),
-    description: optional(formData, "description"),
-    featured: formData.get("featured") === "on",
-    position,
-  };
+  const description = optional(formData, "description");
+  const featured = formData.get("featured") === "on";
   const result = await staffAction(async (token) => {
     const api = catalog(token);
     return id
       ? unwrap(
           await api.PATCH("/v1/admin/collections/{collection_id}", {
             params: { path: { collection_id: id } },
-            body,
+            // slug vazio na edição: mantém o atual (null não é aceito no PATCH)
+            body: { name, ...slugPatch(formData), description, featured, position },
           }),
         )
-      : unwrap(await api.POST("/v1/admin/collections", { body }));
+      : unwrap(
+          await api.POST("/v1/admin/collections", {
+            body: { name, slug: optional(formData, "slug"), description, featured, position },
+          }),
+        );
   });
   if (!result.ok) return failureState(result, FIELD_BY_CODE);
   if (!id) redirect(`/colecoes/${result.data.id}`);

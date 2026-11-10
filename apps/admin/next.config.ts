@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@katoshop/ui", "@katoshop/api-client"],
   poweredByHeader: false,
   experimental: {
+    // forbidden() + app/forbidden.tsx: leitura sem permissão (R25) mostra a página própria
+    authInterrupts: true,
     // upload de fotos: uma foto por action, até 8 MB na API mais a folga do multipart
     // (o proxy.ts bufferiza até 10 MB por padrão, acima deste limite)
     serverActions: { bodySizeLimit: "9mb" },

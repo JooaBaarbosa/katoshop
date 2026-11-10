@@ -8,6 +8,7 @@ import {
   failureState,
   field,
   optional,
+  slugPatch,
   type ActionResult,
   type ActionState,
 } from "../../../../lib/action-state";
@@ -54,6 +55,12 @@ function readProduct(
   };
 }
 
+function withoutSlug(fields: ProductFields): Omit<ProductFields, "slug"> {
+  const rest: Partial<ProductFields> = { ...fields };
+  delete rest.slug;
+  return rest as Omit<ProductFields, "slug">;
+}
+
 export async function createProductAction(
   _prev: ActionState,
   formData: FormData,
@@ -79,7 +86,8 @@ export async function updateProductAction(
     unwrap(
       await catalog(token).PATCH("/v1/admin/products/{product_id}", {
         params: { path: { product_id: id } },
-        body: { version, ...input.fields },
+        // slug vazio na edição: mantém o atual (null não é aceito no PATCH)
+        body: { version, ...withoutSlug(input.fields), ...slugPatch(formData) },
       }),
     ),
   );
@@ -190,6 +198,11 @@ export async function uploadImageAction(
   return { ok: true };
 }
 
+function colorOf(formData: FormData): string | null {
+  const value = field(formData, "color_code");
+  return value === "" || value === "none" ? null : value;
+}
+
 export async function updateImageAction(
   _prev: ActionState,
   formData: FormData,
@@ -204,7 +217,8 @@ export async function updateImageAction(
         params: { path: { image_id: imageId } },
         body: {
           alt,
-          color_code: optional(formData, "color_code"),
+          // "none" é o item "Todas as cores" do seletor: limpa a cor da foto
+          color_code: colorOf(formData),
           credit_author: optional(formData, "credit_author"),
           credit_source_url: optional(formData, "credit_source_url"),
           license: optional(formData, "license"),

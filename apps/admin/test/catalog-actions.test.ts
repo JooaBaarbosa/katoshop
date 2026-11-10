@@ -20,7 +20,8 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }));
 
-vi.mock("next/navigation", () => ({
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
   redirect: (url: string) => {
     throw new RedirectSignal(url);
   },
@@ -127,6 +128,16 @@ describe("updateProductAction (Dados)", () => {
     });
   });
 
+  it("endereço vazio fica fora do PATCH (slug não aceita null na edição)", async () => {
+    mocks.patch.mockResolvedValue(ok({ id: PID, version: 4 }));
+
+    await products.updateProductAction(null, form({ ...PRODUCT_FIELDS, slug: "  " }));
+
+    const [, init] = mocks.patch.mock.calls[0] as [string, { body: Record<string, unknown> }];
+    expect(init.body).not.toHaveProperty("slug");
+    expect(init.body).toMatchObject({ version: 3, name: "Moletom Kato" });
+  });
+
   it("preço inválido não chama a API", async () => {
     const state = await products.updateProductAction(
       null,
@@ -154,7 +165,11 @@ describe("updateProductAction (Dados)", () => {
 
   it("403 de permissão mostra a mensagem sem deslogar", async () => {
     mocks.patch.mockResolvedValue(
-      problem(403, { code: "auth.forbidden", title: "Acesso negado", detail: "Permissão insuficiente." }),
+      problem(403, {
+        code: "auth.insufficient_permission",
+        title: "Permissão insuficiente",
+        detail: "Requer catalog.write.",
+      }),
     );
 
     const state = await products.updateProductAction(null, form(PRODUCT_FIELDS));
@@ -298,6 +313,31 @@ describe("fotos", () => {
     expect(result).toMatchObject({ ok: false, error: "A imagem passa de 8 MB." });
   });
 
+  it.each([
+    ["none", null],
+    ["", null],
+    ["PRT", "PRT"],
+  ])("editar foto com cor %j envia color_code %j", async (color, expected) => {
+    mocks.patch.mockResolvedValue(ok({ id: "img1" }));
+
+    const state = await products.updateImageAction(
+      null,
+      form({ product_id: PID, image_id: "img1", alt: "Foto", color_code: color }),
+    );
+
+    expect(state).toMatchObject({ ok: true });
+    expect(mocks.patch).toHaveBeenCalledWith("/v1/admin/images/{image_id}", {
+      params: { path: { image_id: "img1" } },
+      body: {
+        alt: "Foto",
+        color_code: expected,
+        credit_author: null,
+        credit_source_url: null,
+        license: null,
+      },
+    });
+  });
+
   it("reordena gravando só as posições que mudaram", async () => {
     mocks.get.mockResolvedValue(
       ok({
@@ -432,6 +472,36 @@ describe("categorias", () => {
     expect(mocks.patch).toHaveBeenCalledWith("/v1/admin/categories/{category_id}", {
       params: { path: { category_id: "c1" } },
       body: { name: "A", slug: "a", parent_id: "c2", position: 0 },
+    });
+  });
+});
+
+describe("endereço vazio na edição de categoria e coleção", () => {
+  it("categoria: slug vazio fica fora do PATCH", async () => {
+    mocks.patch.mockResolvedValue(ok({ id: "c1" }));
+
+    await categories.saveCategoryAction(
+      null,
+      form({ id: "c1", name: "A", slug: "", parent_id: "none", position: "0" }),
+    );
+
+    expect(mocks.patch).toHaveBeenCalledWith("/v1/admin/categories/{category_id}", {
+      params: { path: { category_id: "c1" } },
+      body: { name: "A", parent_id: null, position: 0 },
+    });
+  });
+
+  it("coleção: slug vazio fica fora do PATCH", async () => {
+    mocks.patch.mockResolvedValue(ok({ id: "col1" }));
+
+    await collections.saveCollectionAction(
+      null,
+      form({ id: "col1", name: "Inverno", slug: "", description: "", position: "0" }),
+    );
+
+    expect(mocks.patch).toHaveBeenCalledWith("/v1/admin/collections/{collection_id}", {
+      params: { path: { collection_id: "col1" } },
+      body: { name: "Inverno", description: null, featured: false, position: 0 },
     });
   });
 });

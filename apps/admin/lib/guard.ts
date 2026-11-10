@@ -1,8 +1,9 @@
 import "server-only";
 import { ApiProblem, unwrap, type IdentityComponents } from "@katoshop/api-client";
-import { redirect } from "next/navigation";
+import { forbidden, redirect } from "next/navigation";
 import { cache } from "react";
 import { identity } from "./api";
+import { forbiddenKind } from "./forbidden";
 import { session } from "./session";
 
 export type Me = IdentityComponents["schemas"]["UserOut"];
@@ -15,14 +16,17 @@ const NO_ACCESS = "/sair?erro=acesso";
 
 /**
  * Chamada autenticada somente leitura, para Server Components (a renovação é do proxy.ts).
- * 401: login. 403: o token não serve para o painel, então a sessão é encerrada.
+ * 401: login. 403 por falta de permissão (R25): página "sem permissão" (app/forbidden.tsx), a
+ * sessão continua. Outro 403 (token de outra audiência): a sessão é encerrada.
  */
 export async function authed<T>(fn: (token: string) => Promise<T>): Promise<T> {
   try {
     return await session.withAuth(fn);
   } catch (error) {
     if (error instanceof ApiProblem && error.status === 401) redirect("/entrar");
-    if (error instanceof ApiProblem && error.status === 403) redirect(NO_ACCESS);
+    const kind = forbiddenKind(error);
+    if (kind === "permission") forbidden();
+    if (kind === "audience") redirect(NO_ACCESS);
     throw error;
   }
 }

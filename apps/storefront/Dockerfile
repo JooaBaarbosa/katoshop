@@ -1,7 +1,8 @@
 # Contexto de build: raiz do repositório.
-FROM node:24.22.1-alpine AS build
-ENV NEXT_TELEMETRY_DISABLED=1 COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-RUN corepack enable pnpm
+FROM node:26.13.0-alpine AS build
+ENV NEXT_TELEMETRY_DISABLED=1
+# Node 26 não traz mais o corepack; versão igual à do packageManager da raiz
+RUN npm install -g pnpm@12.18.0
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages packages
@@ -15,7 +16,7 @@ ARG IMAGES_ALLOW_LOCAL_IP=false
 ENV IMAGES_ALLOW_LOCAL_IP=$IMAGES_ALLOW_LOCAL_IP
 RUN pnpm --filter @katoshop/storefront build
 
-FROM node:24.22.1-alpine
+FROM node:26.13.0-alpine
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 WORKDIR /app
 # saída standalone: server.js em apps/storefront, dependências rastreadas na raiz

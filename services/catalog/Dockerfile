@@ -1,5 +1,5 @@
 # Contexto de build: raiz do repositório.
-FROM python:3.15.1-slim AS build
+FROM python:3.15.2-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
@@ -8,7 +8,7 @@ COPY libs/py/platform libs/py/platform
 COPY services/catalog services/catalog
 RUN uv sync --frozen --package catalog --no-dev --no-editable
 
-FROM python:3.15.1-slim
+FROM python:3.15.2-slim
 RUN useradd --system --uid 10001 --create-home app
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv

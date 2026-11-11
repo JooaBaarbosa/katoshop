@@ -11,7 +11,7 @@ FROM python:3.15.2-slim
 RUN useradd --system --uid 10001 --create-home app
 WORKDIR /app/scripts
 COPY --from=build /app/.venv /app/.venv
-COPY scripts/seed/__init__.py scripts/seed/__main__.py scripts/seed/client.py scripts/seed/data.py scripts/seed/images.json ./seed/
+COPY scripts/seed/__init__.py scripts/seed/__main__.py scripts/seed/archive_test_data.py scripts/seed/client.py scripts/seed/data.py scripts/seed/images.json ./seed/
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
 # Cache das fotos baixadas (volume): a segunda execução não baixa de novo.
 RUN mkdir -p /app/scripts/seed/.cache && chown -R app:app /app/scripts/seed/.cache

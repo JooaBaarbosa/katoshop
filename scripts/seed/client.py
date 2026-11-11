@@ -95,6 +95,16 @@ class CatalogAdmin:
     def publish(self, product_id: str) -> dict[str, Any]:
         return self._send("POST", f"/products/{product_id}/publish", None, 200)
 
+    def archive(self, product_id: str) -> dict[str, Any]:
+        return self._send("POST", f"/products/{product_id}/archive", None, 200)
+
+    def products_page(self, status: str, cursor: str | None = None) -> dict[str, Any]:
+        """Uma página da lista de admin (itens resumidos e `next_cursor`)."""
+        params = {"status": status, "limit": "100"}
+        if cursor:
+            params["cursor"] = cursor
+        return self._get("/products", **params)
+
     # ------------------------------------------------------------------ estoque
 
     def has_movements(self, variant_id: str) -> bool:

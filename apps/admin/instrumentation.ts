@@ -8,7 +8,11 @@ export function register() {
     // O @vercel/otel só injeta traceparent em fetch para URLs listadas; sem isto o trace
     // do Next não continua no Traefik, no catalog e no Postgres.
     instrumentationConfig: {
-      fetch: { propagateContextUrls: [/^https?:\/\/api\.katoshop\.localhost/] },
+      fetch: {
+        propagateContextUrls: [
+          /^https?:\/\/api\.katoshop\.localhost(?:[:/]|$)/,
+        ],
+      },
     },
   });
 }

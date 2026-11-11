@@ -5,7 +5,7 @@ de portfólio de arquitetura: serviços independentes com um banco Postgres cada
 administração em Next.js, autenticação com JWT validado por cada serviço e rastreamento ponta a ponta no Jaeger. Tudo
 roda localmente com Docker Compose, sem conta em nenhum serviço externo. A loja é demonstrativa: nenhuma compra é real.
 
-![Home da loja demo KatoShop](docs/img/home.png)
+![Home da loja demo KatoShop](docs/img/home.webp)
 
 ![Página de produto da loja demo KatoShop](docs/img/produto.png)
 
@@ -157,8 +157,15 @@ docs/                    arquitetura, ADRs, specs e planos
 
 - Os acessórios (gorros, bonés) não têm tamanho único: o seed usa o tamanho M como "único". Um tamanho "Único" fica
   para uma migração futura.
-- O job `ci-e2e` (pilha completa, Playwright e Lighthouse) foi escrito, mas ainda não rodou no GitHub Actions. Os mesmos
-  testes passam localmente.
+- A CI no GitHub (inclusive o job `ci-e2e`, com pilha completa, Playwright e Lighthouse) foi escrita, mas ainda não rodou:
+  o repositório não foi publicado em um remoto. O critério "CI verde" fica pendente até o primeiro push. Os mesmos
+  checks passam localmente.
+- O teste e2e `admin-to-store` falhou uma vez logo depois de subir o perfil de observabilidade e rodar o seed, e não
+  voltou a falhar em 5 execuções seguidas (3 depois de `pnpm seed`, 2 depois de reiniciar loja e admin). A causa não foi
+  identificada; a suspeita é carga da máquina durante a subida dos containers. O teste espera até 70 s pelo cache de 60 s
+  da loja. Se acontecer, rode de novo.
+- A busca usa AND entre os termos em nome, categoria e descrição (`websearch_to_tsquery`). "moletom preto" acha o moletom
+  preto primeiro, mas também peças cuja descrição cita os dois termos, como a calça jogger de moletom.
 - Não há RabbitMQ, Redis, carrinho nem checkout nesta fatia. Os serviços cart, promotions, orders, payments e shipping
   ainda não existem.
 - As fotos ficam em um volume de disco local do catalog, sem object store.

@@ -47,8 +47,10 @@ Hoje a fatia 1 entrega identity e catalog. O estoque fica no catalog ([ADR 0004]
 
 ## Regras de comunicação
 
-- **Leitura entre serviços:** REST síncrono, com timeout curto (2 s), retry só em operação idempotente e circuit breaker
-  simples na lib compartilhada.
+- **Leitura entre serviços:** REST síncrono pelo cliente HTTP da lib compartilhada (`ks_platform/http.py`): timeout curto
+  (2 s), uma nova tentativa só para GET que falhou ao conectar (nunca para outros métodos) e propagação do
+  `traceparent`. Um circuit breaker simples está previsto (spec seção 3.2), mas ainda não existe: nenhum serviço da
+  fatia 1 chama outro serviço, só o JWKS do identity.
 - **Mudança de estado que outros precisam saber:** evento publicado via transactional outbox. A linha do evento entra
   na mesma transação da mudança e um relay publica no RabbitMQ ([ADR 0003](adr/0003-rabbitmq.md)).
 - **Consumidores:** sempre idempotentes, com tabela `processed_events(event_id)`, fila de falhas (DLQ) e

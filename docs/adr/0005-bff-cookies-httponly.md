@@ -20,8 +20,8 @@ domínio de cada app, com `Secure` ativado por `COOKIE_SECURE` (desligado no des
   erro e a página redireciona ao login. O identity aceita o reuso do refresh token dentro de 10 s do primeiro uso e
   emite um novo par na mesma família sem revogar, para que requisições simultâneas não derrubem a sessão. Depois dessa
   janela, o reuso revoga a família inteira.
-- **CSRF:** `SameSite=Lax` mais a checagem de origem das Server Actions do Next. A rota `GET /sair` valida
-  `Sec-Fetch-Site`.
+- **CSRF:** `SameSite=Lax` mais a checagem de origem das Server Actions do Next. No admin, a rota `GET /sair`
+  valida `Sec-Fetch-Site`.
 - **Rate limit por cliente (R20, R24):** como o identity só enxerga o IP do container do Next, o limite por IP do
   gateway virou um balde global. O Traefik aplica 10 req/s (rajada 20) por IP de cliente nos POSTs de `/entrar` e
   `/criar-conta` e em todo POST com cabeçalho `Next-Action`, nas duas apps.

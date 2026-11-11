@@ -5,6 +5,7 @@ on:
     paths:
       - apps/**
       - packages/**
+      - e2e/**
       - services/*/src/**
       - libs/py/**
       - uv.lock
@@ -18,6 +19,7 @@ on:
     paths:
       - apps/**
       - packages/**
+      - e2e/**
       - services/*/src/**
       - libs/py/**
       - uv.lock
@@ -47,4 +49,6 @@ jobs:
       # quebra de contrato: o OpenAPI/tipos versionados precisam bater com o código dos serviços
       - run: pnpm gen:api
       - run: git diff --exit-code packages/api-client
-      - run: pnpm turbo lint typecheck test build
+      - run: pnpm turbo lint typecheck build
+      # os testes do e2e precisam da pilha do compose: rodam no ci-e2e
+      - run: pnpm turbo test --filter=!e2e

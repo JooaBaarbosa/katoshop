@@ -1,0 +1,77 @@
+name: ci-e2e
+
+# Pilha completa do compose com o seed: fluxos de ponta a ponta (Playwright) e Lighthouse.
+on:
+  pull_request:
+    paths:
+      - apps/**
+      - packages/**
+      - services/**
+      - libs/py/**
+      - infra/**
+      - scripts/**
+      - e2e/**
+      - compose.yaml
+      - .env.example
+      - uv.lock
+      - pyproject.toml
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/ci-e2e.yml
+  push:
+    branches: [main]
+    paths:
+      - apps/**
+      - packages/**
+      - services/**
+      - libs/py/**
+      - infra/**
+      - scripts/**
+      - e2e/**
+      - compose.yaml
+      - .env.example
+      - uv.lock
+      - pyproject.toml
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/ci-e2e.yml
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26.13.0"
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: 0.13.7
+          python-version: "3.15.2"
+      # valores de desenvolvimento (conta demo do R14); a CI sobe com volumes vazios
+      - run: cp .env.example .env
+      - run: uv sync --all-packages --frozen
+      - run: uv run python scripts/gen_keys.py
+      - run: docker compose up -d --build --wait
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm seed
+      - run: pnpm --filter e2e exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - run: pnpm --filter e2e lhci
+      - if: failure()
+        run: docker compose logs --no-color > compose.log
+      - if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: e2e-reports
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+            e2e/.lighthouseci/
+            compose.log
+          retention-days: 7

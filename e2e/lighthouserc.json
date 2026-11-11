@@ -1,0 +1,25 @@
+{
+  "ci": {
+    "collect": {
+      "url": ["http://katoshop.localhost/", "http://katoshop.localhost/p/moletom-canguru-pesado"],
+      "numberOfRuns": 3,
+      "settings": {
+        "preset": "desktop",
+        "chromeFlags": "--headless=new --no-sandbox"
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:accessibility": [
+          "error",
+          { "minScore": 0.95, "aggregationMethod": "median-run" }
+        ],
+        "categories:performance": ["error", { "minScore": 0.9, "aggregationMethod": "median-run" }]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": ".lighthouseci/reports"
+    }
+  }
+}

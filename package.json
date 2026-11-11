@@ -11,11 +11,12 @@
     "dev:down": "docker compose --profile \"*\" down",
     "seed": "docker compose --profile seed run --build --rm seed",
     "gen:api": "uv run python scripts/export_openapi.py && pnpm --filter @katoshop/api-client gen",
-    "test:e2e": "echo \"pendente\"",
+    "test:e2e": "pnpm --filter e2e test",
+    "seed:archive-test-data": "docker compose --profile seed run --build --rm seed python -m seed.archive_test_data",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test"
+    "test": "turbo run test --filter=!e2e"
   },
   "devDependencies": {
     "prettier": "3.9.10",

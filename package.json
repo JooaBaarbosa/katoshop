@@ -9,7 +9,7 @@
   "scripts": {
     "dev:up": "uv run python scripts/gen_keys.py && docker compose up -d --build",
     "dev:down": "docker compose --profile \"*\" down",
-    "seed": "docker compose --profile seed run --rm seed",
+    "seed": "docker compose --profile seed run --build --rm seed",
     "gen:api": "uv run python scripts/export_openapi.py && pnpm --filter @katoshop/api-client gen",
     "test:e2e": "echo \"pendente\"",
     "build": "turbo run build",

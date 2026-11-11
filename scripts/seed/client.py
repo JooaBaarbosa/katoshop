@@ -118,6 +118,10 @@ class CatalogAdmin:
         )
         return _check(response, 200, 201).status_code == 201
 
+    def delete_image(self, image_id: str) -> None:
+        response = self._http.delete(f"{self._base}/images/{image_id}", headers=self._auth)
+        _check(response, 204)
+
     # ------------------------------------------------------------------ vitrine e painel
 
     def put_settings(self, settings: dict[str, Any]) -> None:

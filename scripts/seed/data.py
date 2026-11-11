@@ -222,20 +222,20 @@ PRODUCTS = (
         stock={"OFW": (3, 6, 10, 8, 5, 2, 1)},
     ),
     Product(
-        slug="moletom-gola-careca-off-white",
-        name="Moletom gola careca off-white",
+        slug="moletom-canguru-oversized-cinza",
+        name="Moletom canguru oversized cinza",
         category_slug="moletons",
-        base_price_cents=27900,
+        base_price_cents=34900,
         description=(
-            "Moletom off-white sem capuz, de ombro caído e corpo amplo. Fica bem com "
-            "calça cargo e mochila no dia a dia da cidade."
+            "Moletom cinza com capuz em modelagem ampla e ombro caído. Felpa pesada e "
+            "lisa, sem estampa, para usar com calça clara ou escura."
         ),
         attributes=_attrs(
-            "80% algodão e 20% poliéster, felpado por dentro", "380 g/m²", "Ampla", _MOLETOM
+            "80% algodão e 20% poliéster, felpado por dentro", "420 g/m²", "Oversized", _MOLETOM
         ),
-        colors=("OFW",),
+        colors=("CNZ",),
         sizes=CLOTHING_SIZES,
-        stock={"OFW": (4, 8, 12, 10, 7, 3, 2)},
+        stock={"CNZ": (4, 8, 12, 10, 7, 3, 2)},
     ),
     Product(
         slug="moletom-gola-careca-branco",
@@ -456,7 +456,7 @@ COLLECTIONS = (
         featured=True,
         position=0,
         product_slugs=(
-            "moletom-gola-careca-off-white",
+            "moletom-canguru-oversized-cinza",
             "moletom-canguru-pesado",
             "moletom-canguru-verde-musgo",
             "calca-cargo-marrom",
@@ -499,8 +499,9 @@ COLLECTIONS = (
     ),
 )
 
-# Foto do hero: pessoa de streetwear numa rua de Nova York (também é foto de produto).
-HERO_IMAGE_ID = "unsplash-EIOmriN64sU"
+# Foto do hero: moletom oversized diante de um prédio de tijolos, sem marcas nem letreiros
+# (também é foto de produto, então o arquivo existe e aparece em /creditos).
+HERO_IMAGE_ID = "unsplash-0Aol_QLmhmA"
 
 
 def storefront_settings(hero_image_key: str) -> dict[str, Any]:

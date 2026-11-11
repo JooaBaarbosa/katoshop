@@ -154,6 +154,7 @@ def _seed_images(
     images: list[dict[str, Any]],
     counts: Counter[str],
 ) -> None:
+    wanted_keys: set[str] = set()
     for image in images:
         if product.slug not in image["used_by"]:
             continue
@@ -167,6 +168,12 @@ def _seed_images(
             fields["color_code"] = image["color_code"]
         created = api.upload_image(product_id, photo_bytes(http, image), fields)
         counts["fotos criadas" if created else "fotos já existentes"] += 1
+        wanted_keys.add(f"products/{image['sha256']}.jpg")
+    # Foto que saiu do manifesto sai também do produto (e de /creditos).
+    for stale in api.product(product_id)["images"]:
+        if stale["storage_key"] not in wanted_keys:
+            api.delete_image(stale["id"])
+            counts["fotos removidas"] += 1
 
 
 def seed_products(
@@ -239,6 +246,7 @@ def run() -> None:
         "movimentos initial",
         "fotos criadas",
         "fotos já existentes",
+        "fotos removidas",
     ):
         print(f"  {key}: {counts[key]}")
     status = overview["products_by_status"]

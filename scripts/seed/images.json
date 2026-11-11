@@ -196,17 +196,17 @@
     "color_code": "OFW"
   },
   {
-    "id": "unsplash-EIOmriN64sU",
-    "source_url": "https://unsplash.com/photos/EIOmriN64sU",
-    "download_url": "https://images.unsplash.com/photo-1649114383220-c4f0f0dbafbe?w=1600&q=80&fm=jpg",
-    "author": "Caleb",
+    "id": "unsplash-0Aol_QLmhmA",
+    "source_url": "https://unsplash.com/photos/0Aol_QLmhmA",
+    "download_url": "https://images.unsplash.com/photo-1666443762372-c86511e64151?w=1600&q=80&fm=jpg",
+    "author": "Nicholas Ergemla",
     "license": "Unsplash License",
-    "sha256": "e7c264e0822560dd4888e417b2efeff4189784fac23ee7b957fd66f94887045c",
-    "alt": "Homem em uma rua de Nova York com moletom off-white de gola careca e calça cargo preta, cercado por vapor",
+    "sha256": "8b0d8f5a17bb88c5da6691c13df1c20b6b7b4f1639631d45d55d6ab55e6e42ec",
+    "alt": "Mulher de moletom cinza oversized com capuz e calça clara diante de um prédio de tijolos",
     "used_by": [
-      "moletom-gola-careca-off-white",
-      "calca-cargo-preta"
-    ]
+      "moletom-canguru-oversized-cinza"
+    ],
+    "color_code": "CNZ"
   },
   {
     "id": "unsplash-7cERndkOyDw",
@@ -313,13 +313,13 @@
     "color_code": "PRT"
   },
   {
-    "id": "unsplash-nN8QL12mIKY",
-    "source_url": "https://unsplash.com/photos/nN8QL12mIKY",
-    "download_url": "https://images.unsplash.com/photo-1771315655628-1f94975e6190?w=1600&q=80&fm=jpg",
-    "author": "Danial Dezfouli",
+    "id": "unsplash-h01GvYOSmlM",
+    "source_url": "https://unsplash.com/photos/h01GvYOSmlM",
+    "download_url": "https://images.unsplash.com/photo-1557115837-0c4e58980d47?w=1600&q=80&fm=jpg",
+    "author": "Laura Thonne",
     "license": "Unsplash License",
-    "sha256": "d32de69a7521b471f0c3256c88e8c4d9c237be1a7d3d2df5448cb713ae454160",
-    "alt": "Homem puxando um gorro canelado verde musgo sobre os olhos na rua",
+    "sha256": "1e66155c4b22dedc0c901592bf7f6847dc7f60456b068cd8bf2b5c4bb4f78fa3",
+    "alt": "Homem de barba e óculos usando gorro canelado verde musgo dentro de um ônibus",
     "used_by": [
       "gorro-canelado"
     ],

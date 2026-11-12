@@ -182,6 +182,8 @@ docs/                    arquitetura, ADRs, specs e planos
   Playwright (use `E2E_BROWSER_CHANNEL=chrome`). Mantenha o repositório com finais de linha LF (o `.gitattributes` já
   cuida disso), pois scripts copiados para containers Linux quebram com CRLF.
 - Os textos de privacidade e de termos da loja são modelos de demonstração, não aconselhamento jurídico.
+- Desvios da spec registrados nesta fatia (R29): os formulários validam no servidor (Server Actions e a API), sem zod
+  (spec §4.4); o painel de saúde do Postgres no Grafana fica para a fatia 5 (spec §4.6).
 
 ## Licença e créditos
 

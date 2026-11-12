@@ -48,6 +48,13 @@ def test_image_has_credit_license_and_hash(image: dict[str, object]) -> None:
     assert re.fullmatch(r"[0-9a-f]{64}", str(image["sha256"]))
 
 
+@pytest.mark.parametrize("image", IMAGES, ids=lambda image: image["id"])
+def test_image_has_positive_dimensions(image: dict[str, object]) -> None:
+    for key in ("width", "height"):
+        value = image[key]
+        assert isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
 def test_image_ids_and_hashes_are_unique() -> None:
     assert len({i["id"] for i in IMAGES}) == len(IMAGES)
     assert len({i["sha256"] for i in IMAGES}) == len(IMAGES)

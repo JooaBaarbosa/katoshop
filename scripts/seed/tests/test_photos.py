@@ -1,10 +1,12 @@
 """Download das fotos: cache por hash e erro claro quando o arquivo mudou na origem."""
 
 import hashlib
+import io
 from pathlib import Path
 
 import httpx
 import pytest
+from PIL import Image
 
 from seed import __main__ as seed_main
 from seed.client import SeedError
@@ -44,4 +46,59 @@ def test_hash_mismatch_aborts_with_clear_message(
     message = str(excinfo.value)
     assert "sha256 divergente" in message
     assert "unsplash-teste" in message
+    assert not list(tmp_path.iterdir())
+
+
+def _jpeg(width: int, height: int, color: int = 0) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (width, height), (color, color, color)).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+def _image_for(pinned: bytes, width: int, height: int) -> dict[str, object]:
+    return {**IMAGE, "sha256": hashlib.sha256(pinned).hexdigest(), "width": width, "height": height}
+
+
+def test_rehashed_jpeg_with_same_dimensions_is_accepted_with_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(seed_main, "CACHE_DIR", tmp_path)
+    new = _jpeg(32, 48, color=10)
+    image = _image_for(_jpeg(32, 48, color=200), 32, 48)
+    new_sha = hashlib.sha256(new).hexdigest()
+    calls: list[str] = []
+    with _client(new, calls) as http:
+        assert seed_main.photo_bytes(http, image) == new
+    err = capsys.readouterr().err
+    assert (
+        f"seed: aviso: bytes da foto unsplash-teste mudaram na CDN (sha256 {new_sha}), "
+        "mesma imagem 32x48; usando a versão atual"
+    ) in err
+    assert (tmp_path / f"{image['sha256']}.jpg").read_bytes() == new
+    # segunda chamada: cache aceito pela checagem de dimensões, sem novo download
+    with _client(new, calls) as http:
+        assert seed_main.photo_bytes(http, image) == new
+    assert len(calls) == 1
+
+
+def test_rehashed_jpeg_with_other_dimensions_aborts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(seed_main, "CACHE_DIR", tmp_path)
+    image = _image_for(_jpeg(32, 48, color=200), 32, 48)
+    with _client(_jpeg(40, 48), []) as http, pytest.raises(SeedError, match="sha256 divergente"):
+        seed_main.photo_bytes(http, image)
+    assert not list(tmp_path.iterdir())
+
+
+def test_rehashed_non_jpeg_aborts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(seed_main, "CACHE_DIR", tmp_path)
+    buffer = io.BytesIO()
+    Image.new("RGB", (32, 48)).save(buffer, format="PNG")
+    image = _image_for(_jpeg(32, 48, color=200), 32, 48)
+    with (
+        _client(buffer.getvalue(), []) as http,
+        pytest.raises(SeedError, match="sha256 divergente"),
+    ):
+        seed_main.photo_bytes(http, image)
     assert not list(tmp_path.iterdir())

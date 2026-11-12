@@ -5,6 +5,7 @@ configuração da vitrine pelas APIs de admin. Rodar de novo não cria nada repe
 """
 
 import hashlib
+import io
 import json
 import os
 import sys
@@ -13,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from PIL import Image
 
 from seed import data
 from seed.client import CatalogAdmin, SeedError, staff_login
@@ -37,13 +39,31 @@ def load_manifest() -> list[dict[str, Any]]:
     return json.loads(MANIFEST.read_text(encoding="utf-8"))
 
 
+def _same_jpeg_dimensions(data: bytes, image: dict[str, Any]) -> tuple[int, int] | None:
+    """(largura, altura) se `data` é um JPEG com as dimensões do manifesto; senão None."""
+    try:
+        with Image.open(io.BytesIO(data)) as decoded:
+            decoded.load()
+            size = decoded.size
+            is_jpeg = decoded.format == "JPEG"
+    except OSError, ValueError, Image.DecompressionBombError:
+        return None
+    if is_jpeg and size == (image.get("width"), image.get("height")):
+        return size
+    return None
+
+
 def photo_bytes(http: httpx.Client, image: dict[str, Any]) -> bytes:
-    """Bytes da foto: do cache se o hash bate, senão baixa e confere o sha256."""
+    """Bytes da foto: do cache se confere, senão baixa e valida.
+
+    Confere = sha256 igual ao do manifesto, ou (a CDN reencodou a mesma foto) um JPEG
+    decodificável com a largura e a altura do manifesto.
+    """
     expected = image["sha256"]
     cached = CACHE_DIR / f"{expected}.jpg"
     if cached.is_file():
         data = cached.read_bytes()
-        if hashlib.sha256(data).hexdigest() == expected:
+        if hashlib.sha256(data).hexdigest() == expected or _same_jpeg_dimensions(data, image):
             return data
     response = http.get(image["download_url"], follow_redirects=True, timeout=60)
     if response.status_code != 200:
@@ -54,10 +74,18 @@ def photo_bytes(http: httpx.Client, image: dict[str, Any]) -> bytes:
     data = response.content
     actual = hashlib.sha256(data).hexdigest()
     if actual != expected:
-        raise SeedError(
-            f"sha256 divergente na foto {image['id']}: esperado {expected}, recebido {actual}. "
-            f"O arquivo em {image['download_url']} mudou desde a curadoria; confira a foto e "
-            "atualize images.json antes de rodar o seed de novo."
+        size = _same_jpeg_dimensions(data, image)
+        if size is None:
+            raise SeedError(
+                f"sha256 divergente na foto {image['id']}: esperado {expected}, recebido "
+                f"{actual}. O arquivo em {image['download_url']} mudou desde a curadoria (não é "
+                f"um JPEG {image.get('width')}x{image.get('height')}); confira a foto e "
+                "atualize images.json antes de rodar o seed de novo."
+            )
+        print(
+            f"seed: aviso: bytes da foto {image['id']} mudaram na CDN (sha256 {actual}), "
+            f"mesma imagem {size[0]}x{size[1]}; usando a versão atual",
+            file=sys.stderr,
         )
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cached.write_bytes(data)

@@ -39,7 +39,12 @@ domínio de cada app, com `Secure` ativado por `COOKIE_SECURE` (desligado no des
 - Durante uma queda do identity, o proxy segue sem renovar e as páginas autenticadas redirecionam ao login.
 - Cookies não servem a clientes de API de terceiros. Não é um requisito do projeto.
 - Sem JavaScript, o formulário posta o id da action no corpo e sem o cabeçalho `Next-Action`. Esse caso depende do
-  limite por caminho (`/entrar`, `/criar-conta`) e do limite do identity como retaguarda.
+  limite por caminho (`/entrar`, `/criar-conta`). O identity não tem limite de taxa próprio: a retaguarda é o router
+  `identity-auth` do gateway.
+- Como o BFF chama o identity pelo IP do próprio container, o router `identity-auth` vira um balde único para todos os
+  clientes das apps. Um único IP pode esgotá-lo e bloquear o login de todos com 429 enquanto durar o abuso. Aceito na
+  fatia 1, que roda só localmente (R28). Correção prevista: o BFF repassa um IP de cliente confiável e o identity limita
+  por cliente.
 
 ## Alternativas consideradas
 

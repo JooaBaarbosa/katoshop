@@ -170,6 +170,11 @@ docs/                    arquitetura, ADRs, specs e planos
   ainda não existem.
 - As fotos ficam em um volume de disco local do catalog, sem object store.
 - `PUT /v1/admin/storefront/settings` só é usado pelo seed. A edição da vitrine pelo admin chega na fatia 4.
+- Login e cadastro feitos pela loja e pelo admin chegam ao identity pelo IP do container do Next, então dividem um
+  balde de limite de taxa no gateway. Um único cliente abusivo pode esgotar esse balde e bloquear o login de todos com
+  429 enquanto durar o abuso. Aceito para a demo local; a correção prevista é o BFF repassar um IP de cliente confiável
+  e o identity limitar por cliente ([arquitetura](docs/architecture.md#gateway-e-limites-de-taxa),
+  [ADR 0005](docs/adr/0005-bff-cookies-httponly.md)).
 - Não há rotação automática da chave de assinatura nem revogação imediata de access tokens (valem até 15 minutos).
 - O init do Postgres roda só em volume novo: mudar senhas de banco no `.env` depois da primeira subida exige recriar o
   volume.

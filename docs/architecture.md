@@ -75,8 +75,15 @@ Limite `auth-ratelimit`: 10 req/s em média, rajada de 20, por IP de origem. Ele
 - todo `POST` com cabeçalho `Next-Action` nas duas apps, porque o Next despacha Server Actions pelo cabeçalho e não pelo
   caminho (R24). Uso muito intenso de uma action (mais de 10 por segundo) pode receber 429.
 
-Uploads de imagem passam por um limite de corpo de 9 MiB no router do catalog. O identity mantém o próprio limite por
-IP como retaguarda, e bloqueia a conta por 15 minutos depois de 5 falhas seguidas de login.
+Uploads de imagem passam por um limite de corpo de 9 MiB no router do catalog. O identity não tem limite de taxa
+próprio: a retaguarda é o router `identity-auth` do gateway (o mesmo `auth-ratelimit` nos endpoints de credencial). O
+identity bloqueia a conta por 15 minutos depois de 5 falhas seguidas de login.
+
+Troca aceita na fatia 1 (R28): login e cadastro feitos pelas apps chegam ao `identity-auth` pelo IP do container do Next,
+então todos os clientes dividem um balde só nesse trecho. Um único IP, mesmo respeitando o limite por cliente de cada
+router das apps, pode somar requisições em mais de um deles, esgotar esse balde e fazer o login de todos receber 429
+enquanto durar o abuso. Para a demo local o risco é aceito. A correção prevista para uma fatia posterior: o BFF repassa um IP de cliente confiável ao identity, e
+o identity aplica o limite por cliente.
 
 ## Autenticação
 

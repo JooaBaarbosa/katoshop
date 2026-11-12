@@ -105,6 +105,13 @@ OpenTelemetry nos serviços e nas apps Next.js, com propagação W3C `traceparen
 ao Jaeger e métricas ao Prometheus; o Grafana sobe provisionado com um dashboard RED por serviço. Esses componentes
 ficam no perfil `observability` do Compose e não sobem com `pnpm dev:up`.
 
+Os serviços devolvem o `trace_id` no corpo de todo erro `problem+json`. Nas apps, a página de erro 5xx mostra o
+`digest` do Next como "Código para suporte", porque o Next não repassa o trace ao navegador. Para achar o trace a
+partir desse código, o `onRequestError` exportado em `apps/*/instrumentation.ts` escreve no stderr do container uma
+linha JSON com `event: "request_error"`, o `digest` e o `trace_id` do span ativo (além de método, caminho e rota;
+cabeçalhos ficam fora). O suporte procura o código no log (`docker compose logs storefront | grep <digest>`) e abre o
+`trace_id` no Jaeger.
+
 ## Convenções de API
 
 Prefixo `/v1`, JSON em snake_case, erros `application/problem+json` com `code` estável (`<serviço>.<área>.<motivo>`),

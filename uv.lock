@@ -700,10 +700,14 @@ version = "0.1.0"
 source = { virtual = "scripts/seed" }
 dependencies = [
     { name = "httpx" },
+    { name = "pillow" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "httpx", specifier = "==0.28.1" }]
+requires-dist = [
+    { name = "httpx", specifier = "==0.28.1" },
+    { name = "pillow", specifier = "==13.0.0" },
+]
 
 [[package]]
 name = "mako"

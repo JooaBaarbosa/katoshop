@@ -10,7 +10,9 @@
     "used_by": [
       "camiseta-pesada-preta"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 1067
   },
   {
     "id": "unsplash-WWesmHEgXDs",
@@ -23,7 +25,9 @@
     "used_by": [
       "camiseta-pesada-branca"
     ],
-    "color_code": "BRC"
+    "color_code": "BRC",
+    "width": 1600,
+    "height": 1600
   },
   {
     "id": "unsplash-acn5ERAeSb4",
@@ -36,7 +40,9 @@
     "used_by": [
       "camiseta-pesada-branca"
     ],
-    "color_code": "BRC"
+    "color_code": "BRC",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-QPO2KWB-SLw",
@@ -50,7 +56,9 @@
       "camiseta-basica-off-white",
       "bermuda-moletom"
     ],
-    "color_code": "OFW"
+    "color_code": "OFW",
+    "width": 1600,
+    "height": 2259
   },
   {
     "id": "unsplash-zneickOATGk",
@@ -63,7 +71,9 @@
     "used_by": [
       "camiseta-longline-preta"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-Cs4GVbMqKGY",
@@ -76,7 +86,9 @@
     "used_by": [
       "camiseta-manga-longa-preta"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 1071
   },
   {
     "id": "unsplash-pYDQyzThtLE",
@@ -89,7 +101,9 @@
     "used_by": [
       "camiseta-oversized-preta"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-lETfyhB8g4Q",
@@ -102,7 +116,9 @@
     "used_by": [
       "moletom-canguru-pesado"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 2401
   },
   {
     "id": "unsplash-E3NUmCScugo",
@@ -115,7 +131,9 @@
     "used_by": [
       "moletom-canguru-pesado"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 2395
   },
   {
     "id": "unsplash-a_KC8ocB650",
@@ -128,7 +146,9 @@
     "used_by": [
       "moletom-canguru-pesado"
     ],
-    "color_code": "CNZ"
+    "color_code": "CNZ",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-1Mszk3-0KbM",
@@ -141,7 +161,9 @@
     "used_by": [
       "moletom-canguru-pesado"
     ],
-    "color_code": "CNZ"
+    "color_code": "CNZ",
+    "width": 1600,
+    "height": 1067
   },
   {
     "id": "unsplash-xqhif3j_SAg",
@@ -154,7 +176,9 @@
     "used_by": [
       "moletom-canguru-oversized-preto"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-s9q_bn-uLhg",
@@ -167,7 +191,9 @@
     "used_by": [
       "moletom-canguru-verde-musgo"
     ],
-    "color_code": "VRD"
+    "color_code": "VRD",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-D86EPYMO6iE",
@@ -180,7 +206,9 @@
     "used_by": [
       "moletom-canguru-verde-musgo"
     ],
-    "color_code": "VRD"
+    "color_code": "VRD",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-VoP2WK9rTa4",
@@ -193,7 +221,9 @@
     "used_by": [
       "moletom-canguru-off-white"
     ],
-    "color_code": "OFW"
+    "color_code": "OFW",
+    "width": 1600,
+    "height": 2395
   },
   {
     "id": "unsplash-0Aol_QLmhmA",
@@ -206,7 +236,9 @@
     "used_by": [
       "moletom-canguru-oversized-cinza"
     ],
-    "color_code": "CNZ"
+    "color_code": "CNZ",
+    "width": 1600,
+    "height": 2843
   },
   {
     "id": "unsplash-7cERndkOyDw",
@@ -219,7 +251,9 @@
     "used_by": [
       "moletom-gola-careca-branco"
     ],
-    "color_code": "BRC"
+    "color_code": "BRC",
+    "width": 1600,
+    "height": 1202
   },
   {
     "id": "unsplash-d5GlpSOAzzg",
@@ -232,7 +266,9 @@
     "used_by": [
       "calca-cargo-preta"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-5NPdRwt7BsQ",
@@ -245,7 +281,9 @@
     "used_by": [
       "calca-cargo-marrom"
     ],
-    "color_code": "MRR"
+    "color_code": "MRR",
+    "width": 1600,
+    "height": 1067
   },
   {
     "id": "unsplash-ZpKpUPIHZA0",
@@ -258,7 +296,9 @@
     "used_by": [
       "calca-jogger-moletom"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-y2WnRJssfZw",
@@ -271,7 +311,9 @@
     "used_by": [
       "calca-jogger-moletom"
     ],
-    "color_code": "CNZ"
+    "color_code": "CNZ",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-Tkxd7yU2a5M",
@@ -284,7 +326,9 @@
     "used_by": [
       "calca-moletom-wide-cinza"
     ],
-    "color_code": "CNZ"
+    "color_code": "CNZ",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-h1lEJgfQfig",
@@ -297,7 +341,9 @@
     "used_by": [
       "bermuda-moletom"
     ],
-    "color_code": "CNZ"
+    "color_code": "CNZ",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-kbZh26d-Ez0",
@@ -310,7 +356,9 @@
     "used_by": [
       "gorro-canelado"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 2400
   },
   {
     "id": "unsplash-h01GvYOSmlM",
@@ -323,7 +371,9 @@
     "used_by": [
       "gorro-canelado"
     ],
-    "color_code": "VRD"
+    "color_code": "VRD",
+    "width": 1600,
+    "height": 2667
   },
   {
     "id": "unsplash-2loKxdi6Hmo",
@@ -336,7 +386,9 @@
     "used_by": [
       "bone-lavado-cinza"
     ],
-    "color_code": "CNZ"
+    "color_code": "CNZ",
+    "width": 1600,
+    "height": 1067
   },
   {
     "id": "unsplash-t8HiP3e5abg",
@@ -349,7 +401,9 @@
     "used_by": [
       "bone-trucker-branco"
     ],
-    "color_code": "BRC"
+    "color_code": "BRC",
+    "width": 1600,
+    "height": 2129
   },
   {
     "id": "unsplash-T3A-depWto8",
@@ -357,12 +411,14 @@
     "download_url": "https://images.unsplash.com/photo-1773837463640-e615246f7fa4?w=1600&q=80&fm=jpg",
     "author": "Ryan Hughes",
     "license": "Unsplash License",
-    "sha256": "57a453d099c017f58b79554c81623a62e374e4cba1b2d5b889a15f47fc5fe4b2",
+    "sha256": "ca0556653054d8228b7e078833b66bcc7f0146daa6ca23fcb5d2b32591323ad6",
     "alt": "Pé vestindo meia branca de algodão",
     "used_by": [
       "meia-cano-medio-branca"
     ],
-    "color_code": "BRC"
+    "color_code": "BRC",
+    "width": 1600,
+    "height": 2844
   },
   {
     "id": "unsplash-90kNrvWerXs",
@@ -375,7 +431,9 @@
     "used_by": [
       "meia-canelada-cinza"
     ],
-    "color_code": "CNZ"
+    "color_code": "CNZ",
+    "width": 1600,
+    "height": 2131
   },
   {
     "id": "unsplash-LW2iqpHzr8Y",
@@ -388,7 +446,9 @@
     "used_by": [
       "bolsa-transversal-preta"
     ],
-    "color_code": "PRT"
+    "color_code": "PRT",
+    "width": 1600,
+    "height": 1384
   },
   {
     "id": "unsplash-PENodSVsL1s",
@@ -401,7 +461,9 @@
     "used_by": [
       "ecobag-lona-crua"
     ],
-    "color_code": "OFW"
+    "color_code": "OFW",
+    "width": 1600,
+    "height": 1067
   },
   {
     "id": "unsplash--zBSu3rYjNs",
@@ -414,6 +476,8 @@
     "used_by": [
       "ecobag-lona-crua"
     ],
-    "color_code": "OFW"
+    "color_code": "OFW",
+    "width": 1600,
+    "height": 1280
   }
 ]

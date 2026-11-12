@@ -208,3 +208,11 @@ async def test_storefront_settings_put_validates(admin_client: httpx.AsyncClient
     fetched = await admin_client.get("/v1/admin/storefront/settings")
     assert fetched.status_code == 200
     assert fetched.json() == VALID_SETTINGS
+
+
+async def test_storefront_settings_rejects_nul_in_jsonb(admin_client: httpx.AsyncClient) -> None:
+    """NUL passa pelo pydantic mas o jsonb recusa (SQLSTATE 22P05): 422, não 500."""
+    nul = {**VALID_SETTINGS, "secondary_cta": {"label": "Fo\x00ra", "href": "/c/camisetas"}}
+    response = await admin_client.put("/v1/admin/storefront/settings", json=nul)
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "request.validation"

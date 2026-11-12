@@ -10,7 +10,13 @@ from identity.application.ports import UserRecord
 
 # limite alto o bastante para frases-senha, baixo o bastante para não virar vetor de DoS no Argon2
 Password = Annotated[str, StringConstraints(max_length=256)]
-Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+# sem caracteres de controle: NUL quebraria o INSERT no Postgres (SQLSTATE 22021)
+Name = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=120, pattern=r"^[^\x00-\x1f\x7f]*$"
+    ),
+]
 
 # Os endereços demo usam katoshop.localhost (R14). O email-validator recusa nomes de uso
 # especial mesmo com globally_deliverable=False; a lista é o ajuste documentado da lib.

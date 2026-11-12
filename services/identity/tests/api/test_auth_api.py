@@ -4,7 +4,7 @@ import httpx
 import jwt
 import pytest
 from fastapi import Depends, FastAPI
-from sqlalchemy import update
+from sqlalchemy import text, update
 
 from identity.adapters.models import User
 from identity.domain.lockout import MAX_FAILURES
@@ -270,3 +270,26 @@ async def test_invalid_email_syntax_still_422(client: httpx.AsyncClient, email: 
         )
         assert response.status_code == 422, (path, response.text)
         assert set(response.json()["errors"]) == {"body.email"}
+
+
+@pytest.mark.parametrize("name", ["a\x00b", "\x00", "Ana\x1f", "Ana\x7f"])
+async def test_register_rejects_control_chars_in_name(client: httpx.AsyncClient, name: str) -> None:
+    response = await client.post(
+        "/v1/auth/register", json={"email": "ana@example.com", "password": PASSWORD, "name": name}
+    )
+    assert response.status_code == 422, response.text
+    assert set(response.json()["errors"]) == {"body.name"}
+
+
+async def test_db_input_errors_map_to_422(app: FastAPI, client: httpx.AsyncClient) -> None:
+    """Defesa em profundidade: entrada que escapou da validação vira 422, não 500."""
+
+    async def broken() -> dict[str, str]:
+        async with app.state.session_factory() as session:
+            await session.execute(text("SELECT CAST(:v AS text)"), {"v": "a\x00b"})
+        return {}
+
+    app.add_api_route("/test/db-input-error", broken)
+    response = await client.get("/test/db-input-error")
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "request.validation"

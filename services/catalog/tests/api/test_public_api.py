@@ -499,8 +499,9 @@ async def test_credits(
     [
         ("SELECT CAST(:v AS text)", {"v": "a\x00b"}),
         ("SELECT make_timestamp(2026, 13, 1, 0, 0, 0)", {}),
+        ("SELECT CAST(:v AS jsonb)", {"v": r'"a\u0000b"'}),
     ],
-    ids=["22021-nul-byte", "22008-datetime-overflow"],
+    ids=["22021-nul-byte", "22008-datetime-overflow", "22P05-jsonb-nul-escape"],
 )
 async def test_db_input_errors_map_to_422(
     app: FastAPI, client: httpx.AsyncClient, sql: str, params: dict[str, str]

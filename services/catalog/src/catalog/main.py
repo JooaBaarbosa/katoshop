@@ -6,7 +6,6 @@ from sqlalchemy import text
 
 from catalog.adapters.repositories import sql_unit_of_work
 from catalog.adapters.storage_local import LocalImageStorage
-from catalog.api.errors import install_db_error_handler
 from catalog.api.routes_admin import router as admin_router
 from catalog.api.routes_media import router as media_router
 from catalog.api.routes_public import router as public_router
@@ -14,7 +13,7 @@ from catalog.application.admin_service import AdminCatalogService
 from catalog.settings import CatalogSettings
 from ks_platform.auth import JwksKeyProvider, TokenVerifier
 from ks_platform.db import make_engine, make_session_factory
-from ks_platform.errors import install_problem_handlers
+from ks_platform.errors import install_db_error_handler, install_problem_handlers
 from ks_platform.health import health_router
 from ks_platform.observability import configure_logging, configure_observability
 

@@ -1,7 +1,10 @@
+import httpx
+import pytest
 from fastapi import FastAPI
 from pydantic import BaseModel
+from sqlalchemy.exc import DBAPIError
 
-from ks_platform.errors import ProblemError, install_problem_handlers
+from ks_platform.errors import ProblemError, install_db_error_handler, install_problem_handlers
 
 
 class Payload(BaseModel):
@@ -81,3 +84,43 @@ async def test_problem_error_headers_forwarded(asgi_client_factory):
         response = await c.get("/auth")
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"
+
+
+class _FakeDriverError(Exception):
+    def __init__(self, sqlstate: str) -> None:
+        super().__init__(f"sqlstate {sqlstate}")
+        self.sqlstate = sqlstate
+
+
+def make_db_app() -> FastAPI:
+    app = FastAPI()
+    install_problem_handlers(app)
+    install_db_error_handler(app)
+
+    @app.get("/db/{sqlstate}")
+    async def db_error(sqlstate: str) -> None:
+        raise DBAPIError("SELECT 1", {}, _FakeDriverError(sqlstate))
+
+    return app
+
+
+@pytest.mark.parametrize("sqlstate", ["22021", "22008", "22P05"])
+async def test_db_input_errors_map_to_422(asgi_client_factory, sqlstate):
+    async with asgi_client_factory(make_db_app()) as c:
+        response = await c.get(f"/db/{sqlstate}")
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "request.validation"
+    assert response.headers["content-type"].startswith("application/problem+json")
+
+
+async def test_other_db_errors_stay_500_and_propagate(asgi_client_factory):
+    async with asgi_client_factory(make_db_app()) as c:
+        response = await c.get("/db/22012")
+    assert response.status_code == 500
+    assert response.json()["code"] == "internal.error"
+    # O erro precisa chegar ao ServerErrorMiddleware (traceback no log, exceção no span).
+    transport = httpx.ASGITransport(make_db_app(), raise_app_exceptions=True)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as raw:
+        with pytest.raises(DBAPIError) as raised:
+            await raw.get("/db/22012")
+    assert getattr(raised.value.orig, "sqlstate", None) == "22012"

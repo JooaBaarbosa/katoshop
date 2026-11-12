@@ -128,3 +128,12 @@ async def test_patch_me_accepts_localhost_email(client: httpx.AsyncClient) -> No
     )
     assert response.status_code == 200, response.text
     assert response.json()["email"] == "ana@katoshop.localhost"
+
+
+async def test_patch_me_rejects_nul_in_name(client: httpx.AsyncClient) -> None:
+    pair = await register(client)
+
+    response = await client.patch("/v1/me", json={"name": "Ana\x00Maria"}, headers=_auth(pair))
+
+    assert response.status_code == 422, response.text
+    assert set(response.json()["errors"]) == {"body.name"}

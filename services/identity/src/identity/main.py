@@ -22,7 +22,7 @@ from identity.domain.passwords import validate_password
 from identity.settings import IdentitySettings
 from ks_platform.auth import JwksKeyProvider, TokenVerifier
 from ks_platform.db import make_engine, make_session_factory
-from ks_platform.errors import install_problem_handlers
+from ks_platform.errors import install_db_error_handler, install_problem_handlers
 from ks_platform.health import health_router
 from ks_platform.observability import configure_logging, configure_observability
 
@@ -97,6 +97,7 @@ def create_app(settings: IdentitySettings | None = None) -> FastAPI:
     app.state.auth_service = auth
     app.state.token_verifier = TokenVerifier(JwksKeyProvider(settings.jwks_url, fetch=local_jwks))
     install_problem_handlers(app)
+    install_db_error_handler(app)
     configure_observability(app, settings, engine)
     app.include_router(health_router(ready_check))
     app.include_router(jwks_router)

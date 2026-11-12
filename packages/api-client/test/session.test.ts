@@ -60,6 +60,14 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+/** Fetch que nunca responde, mas respeita o AbortSignal da requisição como o fetch real. */
+function hangingFetch(...args: unknown[]): Promise<Response> {
+  const { signal } = args[0] as Request;
+  return new Promise((_, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason as Error));
+  });
+}
+
 beforeEach(() => {
   store = new FakeCookieStore();
   fetchMock = vi.fn<(...args: unknown[]) => Promise<Response>>();
@@ -193,6 +201,26 @@ describe("withAuth", () => {
     expect(store.values.get("ks_at")).toBe("at-1");
     expect(store.values.get("ks_rt")).toBe("rt-1");
     expect(store.deleted).toEqual([]);
+  });
+
+  it("refresh sem resposta do identity expira em 2 s: propaga o erro e mantém os cookies", async () => {
+    vi.useFakeTimers();
+    try {
+      const session = makeSession();
+      await session.setTokens(pair("1"));
+      fetchMock.mockImplementationOnce(hangingFetch);
+      const fn = vi.fn<Fn>().mockRejectedValue(unauthorized());
+
+      const outcome = session.withAuth(fn, { refresh: true });
+      const assertion = expect(outcome).rejects.toMatchObject({ name: "TimeoutError" });
+      await vi.advanceTimersByTimeAsync(2000);
+      await assertion;
+      expect(store.values.get("ks_at")).toBe("at-1");
+      expect(store.values.get("ks_rt")).toBe("rt-1");
+      expect(store.deleted).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("5xx no refresh propaga ApiProblem com o status real e mantém os cookies", async () => {

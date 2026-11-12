@@ -81,4 +81,26 @@ describe("refreshInProxy", () => {
     expect(result).toBe(response);
     expect(result.cookies.getAll()).toEqual([]);
   });
+
+  it("identity sem resposta: desiste em 2 s, mantém os cookies e segue sem renovar", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementationOnce((...args: unknown[]) => {
+        const { signal } = args[0] as Request;
+        return new Promise((_, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason as Error));
+        });
+      });
+      const response = NextResponse.next();
+
+      const pending = refreshInProxy(requestWith("ks_rt=rt-1"), response, opts);
+      await vi.advanceTimersByTimeAsync(2000);
+      const result = await pending;
+
+      expect(result).toBe(response);
+      expect(result.cookies.getAll()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

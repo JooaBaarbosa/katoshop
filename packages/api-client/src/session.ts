@@ -51,6 +51,7 @@ export interface WithAuthOptions {
 }
 
 const ACCESS_MAX_AGE_SECONDS = 900;
+const REFRESH_TIMEOUT_MS = 2000;
 
 export const nextCookieStore: CookieStore = {
   async get(name) {
@@ -76,10 +77,23 @@ function sharedRefresh(identityBaseUrl: string, refreshToken: string): Promise<T
   let pending = inflight.get(key);
   if (!pending) {
     const client = createIdentityClient(identityBaseUrl);
+    // Sem prazo, um identity travado prende toda página logada no proxy. O estouro rejeita com
+    // TimeoutError, que segue o caminho de 5xx/rede: cookies mantidos, requisição continua.
+    // setTimeout (e não AbortSignal.timeout) para os testes controlarem o relógio.
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort(new DOMException("Refresh sem resposta do identity", "TimeoutError"));
+    }, REFRESH_TIMEOUT_MS);
     pending = client
-      .POST("/v1/auth/refresh", { body: { refresh_token: refreshToken } })
+      .POST("/v1/auth/refresh", {
+        body: { refresh_token: refreshToken },
+        signal: controller.signal,
+      })
       .then((result) => unwrap(result))
-      .finally(() => inflight.delete(key));
+      .finally(() => {
+        clearTimeout(timer);
+        inflight.delete(key);
+      });
     inflight.set(key, pending);
   }
   return pending;

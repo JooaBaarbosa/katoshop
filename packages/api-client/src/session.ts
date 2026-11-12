@@ -50,7 +50,10 @@ export interface WithAuthOptions {
   refresh?: boolean;
 }
 
-const ACCESS_MAX_AGE_SECONDS = 900;
+// expires_in conta desde a emissão do JWT, e o cookie desde o recebimento: a folga evita um
+// cookie que sobrevive ao token. O piso protege contra um expires_in curto demais.
+const ACCESS_EXPIRY_MARGIN_SECONDS = 30;
+const MIN_ACCESS_MAX_AGE_SECONDS = 30;
 const REFRESH_TIMEOUT_MS = 2000;
 
 export const nextCookieStore: CookieStore = {
@@ -124,7 +127,11 @@ export function createSession(opts: SessionOptions): Session {
   }
 
   async function setTokens(pair: TokenPair): Promise<void> {
-    await store.set(accessName, pair.access_token, { ...base, maxAge: ACCESS_MAX_AGE_SECONDS });
+    const maxAge = Math.max(
+      pair.expires_in - ACCESS_EXPIRY_MARGIN_SECONDS,
+      MIN_ACCESS_MAX_AGE_SECONDS,
+    );
+    await store.set(accessName, pair.access_token, { ...base, maxAge });
     await store.set(refreshName, pair.refresh_token, {
       ...base,
       expires: new Date(pair.refresh_expires_at),

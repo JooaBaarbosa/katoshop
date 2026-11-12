@@ -41,7 +41,7 @@ describe("refreshInProxy", () => {
 
     expect(result.cookies.get("ks_at")?.value).toBe("at-2");
     expect(result.cookies.get("ks_rt")?.value).toBe("rt-2");
-    expect(result.cookies.get("ks_at")).toMatchObject({ httpOnly: true, maxAge: 900 });
+    expect(result.cookies.get("ks_at")).toMatchObject({ httpOnly: true, maxAge: 870 });
     const forwarded = result.headers.get("x-middleware-request-cookie");
     expect(forwarded).toContain("ks_at=at-2");
     expect(forwarded).toContain("ks_rt=rt-2");

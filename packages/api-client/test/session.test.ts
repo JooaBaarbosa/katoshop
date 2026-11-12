@@ -91,7 +91,8 @@ describe("setTokens / getAccessToken / clear", () => {
       sameSite: "lax",
       path: "/",
       secure: true,
-      maxAge: 900,
+      // expires_in conta desde a emissão do JWT: 30 s de folga para o cookie não sobreviver ao token
+      maxAge: 870,
     });
     expect(rt?.value).toBe("rt-1");
     expect(rt?.options).toEqual({
@@ -102,6 +103,15 @@ describe("setTokens / getAccessToken / clear", () => {
       expires: new Date(REFRESH_EXPIRES),
     });
     expect(await session.getAccessToken()).toBe("at-1");
+  });
+
+  it("maxAge do access segue expires_in menos 30 s, com piso de 30 s", async () => {
+    const session = makeSession();
+    await session.setTokens({ ...pair("1"), expires_in: 300 });
+    await session.setTokens({ ...pair("2"), expires_in: 20 });
+
+    const maxAges = store.setCalls.filter((c) => c.name === "ks_at").map((c) => c.options.maxAge);
+    expect(maxAges).toEqual([270, 30]);
   });
 
   it("getAccessToken devolve null sem cookie", async () => {

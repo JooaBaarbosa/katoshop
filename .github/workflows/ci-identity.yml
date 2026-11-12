@@ -25,7 +25,7 @@ jobs:
         with:
           version: 0.13.7
           python-version: "3.15.2"
-      - run: uv sync --all-packages --all-groups
+      - run: uv sync --all-packages --all-groups --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pyright services/identity

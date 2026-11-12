@@ -44,7 +44,7 @@ jobs:
         with:
           version: 0.13.7
           python-version: "3.15.2"
-      - run: uv sync --all-packages --all-groups
+      - run: uv sync --all-packages --all-groups --locked
       - run: pnpm install --frozen-lockfile
       # quebra de contrato: o OpenAPI/tipos versionados precisam bater com o código dos serviços
       - run: pnpm gen:api

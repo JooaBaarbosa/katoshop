@@ -1,6 +1,7 @@
 name: ci-catalog
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - services/catalog/**

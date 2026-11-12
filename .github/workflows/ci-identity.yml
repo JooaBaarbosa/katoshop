@@ -1,6 +1,7 @@
 name: ci-identity
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - services/identity/**

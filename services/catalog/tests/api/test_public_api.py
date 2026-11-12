@@ -240,8 +240,6 @@ def _b64(raw: bytes) -> str:
     [
         "lixo",
         _b64(b'{"s":"newest","k":"2026'),
-        _b64(b"[" * 10_000),
-        "a" * 513,
         "não-ascii-é",
         encode_cursor({"s": "price_asc", "k": "100", "id": str(uuid.uuid7())}),
         encode_cursor({"s": "newest", "k": "0001-01-01T00:00:00+05:00", "id": str(uuid.uuid7())}),
@@ -250,8 +248,6 @@ def _b64(raw: bytes) -> str:
     ids=[
         "lixo",
         "truncated-json",
-        "nested-10k",
-        "513-chars",
         "non-ascii",
         "other-sort",
         "year-1-overflow",
@@ -262,6 +258,19 @@ async def test_bad_cursor_422(client: httpx.AsyncClient, cursor: str) -> None:
     response = await anon_get(client, "/v1/products", sort="newest", cursor=cursor)
     assert response.status_code == 422, response.text
     assert response.json()["code"] == INVALID_CURSOR
+
+
+@pytest.mark.parametrize(
+    "cursor", ["a" * 513, _b64(b"[" * 10_000)], ids=["513-chars", "nested-10k"]
+)
+async def test_oversized_cursor_rejected_at_boundary(
+    client: httpx.AsyncClient, cursor: str
+) -> None:
+    response = await anon_get(client, "/v1/products", sort="newest", cursor=cursor)
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["code"] == "request.validation"
+    assert set(body["errors"]) == {"query.cursor"}
 
 
 @pytest.mark.parametrize(

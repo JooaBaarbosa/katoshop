@@ -35,8 +35,9 @@ router = APIRouter(prefix="/v1", tags=["public"])
 CACHE_CONTROL = "public, max-age=30"
 _INT4_MAX = 2**31 - 1
 
-# Sem max_length no cursor: o decode devolve o código próprio de cursor inválido.
-Cursor = Annotated[str | None, Query()]
+# Mesmo teto do decode_cursor (MAX_CURSOR_LENGTH) e do admin: cursor longo demais é recusado
+# na borda (422 request.validation); os demais inválidos recebem o código próprio no decode.
+Cursor = Annotated[str | None, Query(max_length=512)]
 Limit = Annotated[int, Query(ge=1, le=100)]
 # Validação na borda: o Postgres recusa NUL em texto (seria 500), e nada fora destes formatos
 # existe no catálogo. Slugs de categoria e coleção têm até 120; de produto, até 160.

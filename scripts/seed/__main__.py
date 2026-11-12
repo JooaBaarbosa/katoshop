@@ -53,6 +53,11 @@ def _same_jpeg_dimensions(data: bytes, image: dict[str, Any]) -> tuple[int, int]
     return None
 
 
+def photo_storage_key(data: bytes) -> str:
+    """Chave da foto no storage: o admin nomeia pelo sha256 dos bytes realmente enviados."""
+    return f"products/{hashlib.sha256(data).hexdigest()}.jpg"
+
+
 def photo_bytes(http: httpx.Client, image: dict[str, Any]) -> bytes:
     """Bytes da foto: do cache se confere, senão baixa e valida.
 
@@ -194,9 +199,10 @@ def _seed_images(
         }
         if image.get("color_code"):
             fields["color_code"] = image["color_code"]
-        created = api.upload_image(product_id, photo_bytes(http, image), fields)
+        photo = photo_bytes(http, image)
+        created = api.upload_image(product_id, photo, fields)
         counts["fotos criadas" if created else "fotos já existentes"] += 1
-        wanted_keys.add(f"products/{image['sha256']}.jpg")
+        wanted_keys.add(photo_storage_key(photo))
     # Foto que saiu do manifesto sai também do produto (e de /creditos).
     for stale in api.product(product_id)["images"]:
         if stale["storage_key"] not in wanted_keys:
@@ -236,10 +242,10 @@ def seed_collection_products(
         api.set_collection_products(collection_ids[collection.slug], ordered)
 
 
-def seed_settings(api: CatalogAdmin, images: list[dict[str, Any]]) -> None:
+def seed_settings(api: CatalogAdmin, http: httpx.Client, images: list[dict[str, Any]]) -> None:
     hero = next(i for i in images if i["id"] == data.HERO_IMAGE_ID)
     # Chave endereçada por conteúdo, igual à que o catálogo gravou no upload da foto.
-    api.put_settings(data.storefront_settings(f"products/{hero['sha256']}.jpg"))
+    api.put_settings(data.storefront_settings(photo_storage_key(photo_bytes(http, hero))))
 
 
 # ---------------------------------------------------------------------------- main
@@ -258,7 +264,7 @@ def run() -> None:
         collection_ids = seed_collections(api, counts)
         product_ids = seed_products(api, http, category_ids, images, counts)
         seed_collection_products(api, collection_ids, product_ids)
-        seed_settings(api, images)
+        seed_settings(api, http, images)
         overview = api.overview()
 
     print("Seed concluído (dados demonstrativos).")

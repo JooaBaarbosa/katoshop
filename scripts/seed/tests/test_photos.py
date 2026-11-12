@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+from collections import Counter
 from pathlib import Path
 
 import httpx
@@ -102,3 +103,51 @@ def test_rehashed_non_jpeg_aborts(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     ):
         seed_main.photo_bytes(http, image)
     assert not list(tmp_path.iterdir())
+
+
+class _FakeApi:
+    """Imita o admin: a chave de storage de cada foto é o sha256 dos bytes enviados."""
+
+    def __init__(self) -> None:
+        self.images: list[dict[str, str]] = []
+        self.deleted: list[str] = []
+        self.settings: dict[str, object] = {}
+
+    def upload_image(self, product_id: str, data: bytes, fields: dict[str, str]) -> bool:
+        key = f"products/{hashlib.sha256(data).hexdigest()}.jpg"
+        self.images.append({"id": key, "storage_key": key})
+        return True
+
+    def product(self, product_id: str) -> dict[str, object]:
+        return {"images": list(self.images)}
+
+    def delete_image(self, image_id: str) -> None:
+        self.deleted.append(image_id)
+
+    def put_settings(self, settings: dict[str, object]) -> None:
+        self.settings = settings
+
+
+def test_reencoded_photo_is_not_removed_as_stale_and_hero_uses_real_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(seed_main, "CACHE_DIR", tmp_path)
+    new = _jpeg(32, 48, color=10)
+    image = {
+        **_image_for(_jpeg(32, 48, color=200), 32, 48),
+        "alt": "a",
+        "author": "b",
+        "source_url": "https://unsplash.com/photos/x",
+        "license": "Unsplash License",
+        "used_by": ["camiseta"],
+    }
+    real_key = f"products/{hashlib.sha256(new).hexdigest()}.jpg"
+    api = _FakeApi()
+    product = type("P", (), {"slug": "camiseta"})()
+    with _client(new, []) as http:
+        counts: Counter[str] = Counter()
+        seed_main._seed_images(api, http, product, "pid", [image], counts)  # type: ignore[arg-type]
+        assert api.deleted == []
+        monkeypatch.setattr(seed_main.data, "HERO_IMAGE_ID", image["id"])
+        seed_main.seed_settings(api, http, [image])  # type: ignore[arg-type]
+    assert api.settings["hero"]["image_key"] == real_key  # type: ignore[index]

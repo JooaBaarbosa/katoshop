@@ -38,6 +38,13 @@ minimumReleaseAgeExclude:
   - lucide-react@1.71.0
   - marked@18.2.0
   - next@16.4.6
+  - '@turbo/darwin-64@2.11.11'
+  - '@turbo/darwin-arm64@2.11.11'
+  - '@turbo/linux-64@2.11.11'
+  - '@turbo/linux-arm64@2.11.11'
+  - '@turbo/windows-64@2.11.11'
+  - '@turbo/windows-arm64@2.11.11'
+  - turbo@2.11.11
 # Uma única @opentelemetry/api no workspace: o next a recebe como peer opcional e versões
 # diferentes geram duas cópias do next (tipos NextRequest/NextResponse incompatíveis entre a app
 # e o @katoshop/api-client). 1.9.x é a última aceita pelos SDKs 2.x exigidos pelo @vercel/otel.

@@ -1,4 +1,5 @@
 import asyncio
+import math
 import time
 from collections.abc import Callable
 from typing import Any
@@ -8,6 +9,7 @@ import httpx
 from ks_platform.errors import ProblemError
 
 _RENEW_MARGIN_S = 30.0
+_MAX_TTL_S = 3600.0
 
 
 def _unavailable() -> ProblemError:
@@ -29,11 +31,16 @@ class ServiceTokenProvider:
         self._url = token_url
         self._client_id = client_id
         self._client_secret = client_secret
+        self._owns_http = http is None
         self._http = http or httpx.AsyncClient(timeout=2.0)
         self._clock = clock
         self._token: str | None = None
         self._renew_at = 0.0
         self._lock = asyncio.Lock()
+
+    async def aclose(self) -> None:
+        if self._owns_http:
+            await self._http.aclose()
 
     def _fresh(self) -> bool:
         return self._token is not None and self._clock() < self._renew_at
@@ -56,11 +63,16 @@ class ServiceTokenProvider:
             response.raise_for_status()
             body: dict[str, Any] = response.json()
             token = body["access_token"]
-            expires_in = float(body["expires_in"])
+            raw_ttl = body["expires_in"]
             if not isinstance(token, str) or not token:
                 raise ValueError("access_token inválido")
+            if isinstance(raw_ttl, bool) or not isinstance(raw_ttl, int | float):
+                raise ValueError("expires_in inválido")
+            if not math.isfinite(raw_ttl) or raw_ttl <= 0:
+                raise ValueError("expires_in inválido")
+            expires_in = min(float(raw_ttl), _MAX_TTL_S)
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             raise _unavailable() from exc
         self._token = token
-        self._renew_at = requested_at + expires_in - _RENEW_MARGIN_S
+        self._renew_at = requested_at + expires_in - min(_RENEW_MARGIN_S, expires_in / 2)
         return token

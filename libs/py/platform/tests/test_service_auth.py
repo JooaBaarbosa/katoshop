@@ -179,3 +179,71 @@ async def test_provider_failure_does_not_poison_cache() -> None:
         await provider.token()
     server.status = 200
     assert await provider.token() == "tok2"
+
+
+def _provider_with_body(body: dict[str, object], clock: FakeClock) -> ServiceTokenProvider:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(200, json=body)
+
+    provider = ServiceTokenProvider(
+        "http://identity/x",
+        "cart",
+        "s",
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        clock=clock,
+    )
+    provider.calls = calls  # type: ignore[attr-defined]
+    return provider
+
+
+async def test_provider_short_ttl_cached_for_half_then_refreshed() -> None:
+    server, clock = TokenServer(expires_in=10), FakeClock()
+    provider = _provider(server, clock)
+    await provider.token()
+    clock.now = 4.9
+    await provider.token()
+    assert server.calls == 1
+    clock.now = 5.1
+    assert await provider.token() == "tok2"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"access_token": "t", "expires_in": 0},
+        {"access_token": "t", "expires_in": -5},
+        {"access_token": "t"},
+        {"access_token": "t", "expires_in": True},
+        {"access_token": "t", "expires_in": "300"},
+        {"access_token": "t", "expires_in": float("inf")},
+        {"access_token": "t", "expires_in": float("nan")},
+        {"access_token": "", "expires_in": 300},
+    ],
+)
+async def test_provider_invalid_expires_in_raises_503(body: dict[str, object]) -> None:
+    provider = _provider_with_body(body, FakeClock())
+    with pytest.raises(ProblemError) as exc:
+        await provider.token()
+    assert (exc.value.status, exc.value.code) == (503, "auth.service_token_unavailable")
+
+
+async def test_provider_huge_ttl_is_capped_to_one_hour() -> None:
+    clock = FakeClock()
+    provider = _provider_with_body({"access_token": "t", "expires_in": 1e308}, clock)
+    await provider.token()
+    clock.now = 3600
+    await provider.token()
+    assert provider.calls["n"] == 2  # type: ignore[attr-defined]
+
+
+async def test_provider_aclose_closes_only_owned_client() -> None:
+    http = httpx.AsyncClient()
+    await ServiceTokenProvider("http://x", "c", "s", http=http).aclose()
+    assert not http.is_closed
+    await http.aclose()
+    owned = ServiceTokenProvider("http://x", "c", "s")
+    await owned.aclose()
+    assert owned._http.is_closed  # pyright: ignore[reportPrivateUsage]

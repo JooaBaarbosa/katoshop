@@ -231,7 +231,9 @@ def _bearer_token(request: Request) -> str:
     return token.strip()
 
 
-def require_audience(audience: str) -> Callable[..., Awaitable[Principal]]:
+def require_audience(
+    audience: Literal["storefront", "admin"],
+) -> Callable[..., Awaitable[Principal]]:
     async def dependency(request: Request) -> Principal:
         verifier: TokenVerifier = request.app.state.token_verifier
         return await verifier.verify(_bearer_token(request), audience)
@@ -247,7 +249,9 @@ def require_service() -> Callable[..., Awaitable[ServicePrincipal]]:
     return dependency
 
 
-def require_permission(perm: str, audience: str = "admin") -> Callable[..., Awaitable[Principal]]:
+def require_permission(
+    perm: str, audience: Literal["storefront", "admin"] = "admin"
+) -> Callable[..., Awaitable[Principal]]:
     async def dependency(
         principal: Principal = Depends(require_audience(audience)),  # noqa: B008
     ) -> Principal:

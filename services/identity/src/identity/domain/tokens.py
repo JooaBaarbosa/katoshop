@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 ISSUER = "katoshop-identity"
 ACCESS_TTL = timedelta(seconds=900)
 REFRESH_TTL = {"storefront": timedelta(days=30), "admin": timedelta(hours=12)}
+SERVICE_TTL = timedelta(seconds=300)
 REUSE_GRACE = timedelta(seconds=10)
 
 type Audience = Literal["storefront", "admin"]
@@ -64,6 +65,23 @@ def issue_access_token(
         "jti": str(uuid.uuid4()),
         "roles": roles,
         "kind": kind,
+    }
+    return jwt.encode(claims, key.private_key, algorithm="EdDSA", headers={"kid": key.kid})
+
+
+def issue_service_token(key: SigningKey, client_id: str, now: datetime) -> str:
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("now precisa ter timezone (naive datetime recusado)")
+    issued_at = now.astimezone(UTC)
+    claims = {
+        "iss": ISSUER,
+        "sub": client_id,
+        "aud": "service",
+        "iat": issued_at,
+        "exp": issued_at + SERVICE_TTL,
+        "jti": str(uuid.uuid4()),
+        "roles": [],
+        "kind": "service",
     }
     return jwt.encode(claims, key.private_key, algorithm="EdDSA", headers={"kid": key.kid})
 

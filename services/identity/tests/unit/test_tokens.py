@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from identity.adapters.signing import SigningKey, load_signing_key
-from identity.domain.tokens import issue_access_token, new_refresh_token
+from identity.domain.tokens import issue_access_token, issue_service_token, new_refresh_token
 from ks_platform.auth import JwksKeyProvider, TokenVerifier
 
 
@@ -100,3 +100,21 @@ def test_issue_access_token_rejects_unknown_audience_or_kind(
             [],
             datetime.now(UTC),
         )
+
+
+def test_service_token_claims_and_ttl(signing_key: SigningKey) -> None:
+    token = issue_service_token(signing_key, "cart", datetime.now(UTC))
+    claims = jwt.decode(token, options={"verify_signature": False})
+
+    assert claims["exp"] - claims["iat"] == 300
+    assert claims["sub"] == "cart"
+    assert claims["aud"] == "service"
+    assert claims["kind"] == "service"
+    assert claims["roles"] == []
+    assert claims["iss"] == "katoshop-identity"
+    assert claims["jti"]
+
+
+def test_issue_service_token_rejects_naive_now(signing_key: SigningKey) -> None:
+    with pytest.raises(ValueError, match="timezone"):
+        issue_service_token(signing_key, "cart", datetime.now())  # noqa: DTZ005

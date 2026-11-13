@@ -133,6 +133,52 @@
         "title": "RegisterIn",
         "type": "object"
       },
+      "ServiceTokenIn": {
+        "properties": {
+          "client_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Client Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "client_secret"
+        ],
+        "title": "ServiceTokenIn",
+        "type": "object"
+      },
+      "ServiceTokenOut": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "token_type": {
+            "const": "bearer",
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in"
+        ],
+        "title": "ServiceTokenOut",
+        "type": "object"
+      },
       "TokenPairOut": {
         "properties": {
           "access_token": {
@@ -467,6 +513,47 @@
           }
         },
         "summary": "Register",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/service-token": {
+      "post": {
+        "operationId": "service_token_v1_auth_service_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceTokenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Service Token",
         "tags": [
           "auth"
         ]

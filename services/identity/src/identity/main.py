@@ -17,6 +17,7 @@ from identity.adapters.signing import load_signing_key
 from identity.api.routes_auth import router as auth_router
 from identity.api.routes_jwks import router as jwks_router
 from identity.api.routes_me import router as me_router
+from identity.api.routes_service import router as service_router
 from identity.application.auth_service import AuthService
 from identity.domain.passwords import validate_password
 from identity.settings import IdentitySettings
@@ -26,9 +27,17 @@ from ks_platform.errors import install_db_error_handler, install_problem_handler
 from ks_platform.health import health_router
 from ks_platform.observability import configure_logging, configure_observability
 
+MIN_SERVICE_SECRET_LENGTH = 32
+
 
 def create_app(settings: IdentitySettings | None = None) -> FastAPI:
     settings = settings or IdentitySettings()  # pyright: ignore[reportCallIssue]
+    for client_id, secret in settings.service_clients.items():
+        if len(secret) < MIN_SERVICE_SECRET_LENGTH:
+            raise RuntimeError(
+                f"IDENTITY_SERVICE_CLIENTS: o segredo de {client_id!r} precisa ter "
+                f"ao menos {MIN_SERVICE_SECRET_LENGTH} caracteres"
+            )
     configure_logging(settings.service_name, settings.log_level)
     engine = make_engine(settings.database_url)
     session_factory = make_session_factory(engine)
@@ -103,6 +112,7 @@ def create_app(settings: IdentitySettings | None = None) -> FastAPI:
     app.include_router(jwks_router)
     app.include_router(auth_router)
     app.include_router(me_router)
+    app.include_router(service_router)
     return app
 
 

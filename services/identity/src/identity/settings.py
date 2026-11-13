@@ -14,3 +14,5 @@ class IdentitySettings(BaseServiceSettings):
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
     cookie_secure: bool = False
+    # client credentials dos serviços internos: {"cart": "<segredo>"} em JSON
+    service_clients: dict[str, str] = {}

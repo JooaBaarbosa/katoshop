@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
@@ -112,7 +113,7 @@ def configure_observability(
 ) -> None:
     """Providers OTel (OTLP gRPC quando `otel_endpoint` existe) e instrumentação.
 
-    Idempotente: providers e instrumentadores globais (httpx, asyncpg) são configurados
+    Idempotente: providers e instrumentadores globais (httpx, asyncpg, aio-pika) são configurados
     na primeira chamada; a cada chamada o `app` e o `engine` recebidos são instrumentados.
     `span_exporter` (opcional, para testes) recebe todos os spans via processador síncrono.
     """
@@ -125,6 +126,7 @@ def configure_observability(
             tracer_provider=tracer_provider, meter_provider=meter_provider
         )
         AsyncPGInstrumentor().instrument(tracer_provider=tracer_provider)
+        AioPikaInstrumentor().instrument(tracer_provider=tracer_provider)
         _providers = (tracer_provider, meter_provider)
     tracer_provider, meter_provider = _providers
     if span_exporter is not None:

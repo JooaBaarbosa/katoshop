@@ -1,7 +1,9 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import aio_pika
 import asyncpg
+import redis.asyncio as redis
 from fastapi import FastAPI
 
 from ks_platform.health import health_router
@@ -92,3 +94,18 @@ async def test_run_migrations_works_inside_running_loop(postgres_url, tmp_path):
         assert await conn.fetchval("SELECT to_regclass('public.migrated')") == "migrated"
     finally:
         await conn.close()
+
+
+async def test_rabbitmq_url_accepts_connections(rabbitmq_url):
+    assert rabbitmq_url.startswith("amqp://")
+    connection = await aio_pika.connect(rabbitmq_url)
+    await connection.close()
+
+
+async def test_redis_url_accepts_connections(redis_url):
+    assert redis_url.startswith("redis://")
+    client = redis.from_url(redis_url)
+    try:
+        assert await client.ping()
+    finally:
+        await client.aclose()

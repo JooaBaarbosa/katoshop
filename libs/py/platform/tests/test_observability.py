@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.metrics import _internal as metrics_internal
@@ -95,6 +96,7 @@ def otel_reset():
     yield
     HTTPXClientInstrumentor().uninstrument()
     AsyncPGInstrumentor().uninstrument()
+    AioPikaInstrumentor().uninstrument()
     observability._providers = None  # noqa: SLF001
     trace._TRACER_PROVIDER = None  # noqa: SLF001
     trace._TRACER_PROVIDER_SET_ONCE._done = False  # noqa: SLF001
@@ -143,3 +145,8 @@ async def test_configure_observability_twice_instruments_both_apps(asgi_client_f
         servers = [s for s in exporter.get_finished_spans() if s.kind == SpanKind.SERVER]
         assert servers, "no server span"
         assert servers[0].resource.attributes["service.name"] == "svc"
+
+
+def test_configure_observability_instruments_aio_pika(otel_reset):
+    configure_observability(_app(), _settings())
+    assert AioPikaInstrumentor().is_instrumented_by_opentelemetry

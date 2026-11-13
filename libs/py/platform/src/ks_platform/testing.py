@@ -1,7 +1,8 @@
 """Plugin pytest compartilhado. Requer o extra `katoshop-platform[testing]`."""
 
+import warnings
 from collections.abc import AsyncIterator, Callable, Iterator
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, contextmanager
 from pathlib import Path
 from threading import Thread
 
@@ -12,6 +13,9 @@ from alembic.config import Config
 from asgi_lifespan import LifespanManager
 from fastapi import FastAPI
 from testcontainers.community.postgres import PostgresContainer
+
+RABBITMQ_IMAGE = "rabbitmq:4.4.0-management-alpine"
+REDIS_IMAGE = "redis:8.10.3-alpine"
 
 
 def run_migrations(alembic_ini: Path, url: str) -> None:
@@ -37,6 +41,47 @@ def run_migrations(alembic_ini: Path, url: str) -> None:
 def postgres_url() -> Iterator[str]:
     with PostgresContainer("postgres:18.6-alpine", driver="asyncpg") as pg:
         yield pg.get_connection_url()
+
+
+@contextmanager
+def _legacy_wait_allowed() -> Iterator[None]:
+    """Os containers de RabbitMQ e Redis do testcontainers 4.15 ainda usam o decorator
+    `@wait_container_is_ready`, que emite DeprecationWarning na importação e na espera."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="The @wait_container_is_ready decorator is deprecated",
+            category=DeprecationWarning,
+        )
+        yield
+
+
+@pytest.fixture(scope="session")
+def rabbitmq_url() -> Iterator[str]:
+    with _legacy_wait_allowed():
+        from testcontainers.community.rabbitmq import RabbitMqContainer
+
+        rabbit = RabbitMqContainer(RABBITMQ_IMAGE).start()
+    try:
+        host = rabbit.get_container_host_ip()
+        port = rabbit.get_exposed_port(rabbit.port)
+        yield f"amqp://{rabbit.username}:{rabbit.password}@{host}:{port}/"
+    finally:
+        rabbit.stop()
+
+
+@pytest.fixture(scope="session")
+def redis_url() -> Iterator[str]:
+    with _legacy_wait_allowed():
+        from testcontainers.community.redis import RedisContainer
+
+        redis = RedisContainer(REDIS_IMAGE).start()
+    try:
+        host = redis.get_container_host_ip()
+        port = redis.get_exposed_port(redis.port)
+        yield f"redis://{host}:{port}/0"
+    finally:
+        redis.stop()
 
 
 @pytest.fixture

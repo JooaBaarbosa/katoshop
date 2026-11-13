@@ -13,6 +13,7 @@ from alembic.config import Config
 from asgi_lifespan import LifespanManager
 from fastapi import FastAPI
 from testcontainers.community.postgres import PostgresContainer
+from testcontainers.core.container import DockerContainer
 
 RABBITMQ_IMAGE = "rabbitmq:4.4.0-management-alpine"
 REDIS_IMAGE = "redis:8.10.3-alpine"
@@ -57,17 +58,23 @@ def _legacy_wait_allowed() -> Iterator[None]:
 
 
 @pytest.fixture(scope="session")
-def rabbitmq_url() -> Iterator[str]:
+def rabbitmq_container() -> Iterator[DockerContainer]:
+    """Container do broker; use `.exec(["rabbitmqctl", ...])` para simular quedas."""
     with _legacy_wait_allowed():
         from testcontainers.community.rabbitmq import RabbitMqContainer
 
         rabbit = RabbitMqContainer(RABBITMQ_IMAGE).start()
     try:
-        host = rabbit.get_container_host_ip()
-        port = rabbit.get_exposed_port(rabbit.port)
-        yield f"amqp://{rabbit.username}:{rabbit.password}@{host}:{port}/"
+        yield rabbit
     finally:
         rabbit.stop()
+
+
+@pytest.fixture(scope="session")
+def rabbitmq_url(rabbitmq_container: DockerContainer) -> str:
+    host = rabbitmq_container.get_container_host_ip()
+    port = rabbitmq_container.get_exposed_port(5672)
+    return f"amqp://guest:guest@{host}:{port}/"
 
 
 @pytest.fixture(scope="session")

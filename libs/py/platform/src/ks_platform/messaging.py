@@ -27,6 +27,7 @@ ERROR_HEADER = "x-error"
 _CONTENT_TYPE = "application/json"
 _PREFETCH = 10
 _MAX_ERROR_LEN = 500
+_FORWARD_FAILURE_BACKOFF_S = 1.0
 
 type Handler = Callable[[Envelope], Awaitable[None]]
 
@@ -108,8 +109,12 @@ async def declare_consumer_topology(
     queue: str,
     bindings: list[str],
     retry_delays_s: tuple[int, ...] = (1, 5, 25),
-) -> None:
-    """Exchange topic, fila principal, filas de espera com TTL (voltam à principal) e DLQ."""
+) -> AbstractQueue:
+    """Exchange topic, fila principal, filas de espera com TTL (voltam à principal) e DLQ.
+
+    Devolve a fila principal declarada pelo canal: num canal robusto é essa instância que
+    restaura o consumidor depois de uma reconexão.
+    """
     ex = await channel.declare_exchange(exchange, aio_pika.ExchangeType.TOPIC, durable=True)
     main = await channel.declare_queue(queue, durable=True)
     for key in bindings:
@@ -125,6 +130,7 @@ async def declare_consumer_topology(
             },
         )
     await channel.declare_queue(dlq_name(queue), durable=True)
+    return main
 
 
 def _carrier(headers: Mapping[str, object]) -> dict[str, str]:
@@ -176,16 +182,16 @@ class EventConsumer:
     async def start(self) -> None:
         connection = await aio_pika.connect_robust(self._url)
         try:
-            channel = await connection.channel(publisher_confirms=True)
+            # on_return_raises: encaminhar para fila inexistente vira erro, não ack silencioso.
+            channel = await connection.channel(publisher_confirms=True, on_return_raises=True)
             await channel.set_qos(prefetch_count=_PREFETCH)
-            await declare_consumer_topology(
+            queue = await declare_consumer_topology(
                 channel,
                 exchange=self._exchange,
                 queue=self._queue_name,
                 bindings=self._bindings,
                 retry_delays_s=self._delays,
             )
-            queue = await channel.get_queue(self._queue_name, ensure=False)
             self._consumer_tag = await queue.consume(self._on_message)
         except BaseException:
             await connection.close()
@@ -193,12 +199,14 @@ class EventConsumer:
         self._connection, self._channel, self._queue = connection, channel, queue
 
     async def stop(self) -> None:
-        if self._queue is not None and self._consumer_tag is not None:
-            await self._queue.cancel(self._consumer_tag)
-        if self._connection is not None:
-            await self._connection.close()
-        self._connection = self._channel = self._queue = None
-        self._consumer_tag = None
+        try:
+            if self._queue is not None and self._consumer_tag is not None:
+                await self._queue.cancel(self._consumer_tag)
+        finally:
+            if self._connection is not None:
+                await self._connection.close()
+            self._connection = self._channel = self._queue = None
+            self._consumer_tag = None
 
     async def _on_message(self, message: AbstractIncomingMessage) -> None:
         headers = dict(message.headers or {})
@@ -282,6 +290,8 @@ class EventConsumer:
             )
         except Exception:
             logger.exception("falha ao encaminhar mensagem para %s; devolvendo à fila", routing_key)
+            # Pausa curta para não girar em loop quente enquanto o destino não existe.
+            await asyncio.sleep(_FORWARD_FAILURE_BACKOFF_S)
             await message.nack(requeue=True)
             return
         await message.ack()

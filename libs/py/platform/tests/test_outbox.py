@@ -243,3 +243,33 @@ async def test_run_forever_keeps_going_after_failures(outbox):
     await task
     (row,) = await _rows(factory, table)
     assert row.attempts == 2
+
+
+async def test_retention_cleanup_runs_at_most_once_per_minute(outbox):
+    factory, table = outbox
+    (event,) = await _add(factory, table, 1)
+    relay = OutboxRelay(factory, table, FakePublisher(), retention=timedelta(days=7))
+    assert await relay.run_once() == 1
+    async with factory() as session, session.begin():
+        await session.execute(
+            update(table)
+            .where(table.c.id == event.id)
+            .values(published_at=func.now() - text("interval '8 days'"))
+        )
+
+    await relay.run_once()
+
+    assert len(await _rows(factory, table)) == 1
+
+
+async def test_relay_logs_error_after_ten_attempts(outbox, caplog):
+    factory, table = outbox
+    await _add(factory, table, 1)
+    async with factory() as session, session.begin():
+        await session.execute(update(table).values(attempts=9))
+    relay = OutboxRelay(factory, table, FakePublisher(fail_on={0}))
+
+    await relay.run_once()
+
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert errors and "10" in errors[0].getMessage()

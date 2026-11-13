@@ -253,3 +253,118 @@ async def test_invalid_envelope_goes_straight_to_dlq(rabbitmq_url, channel, name
     assert calls == []
     retry = await channel.get_queue(f"{queue}.retry.1s", ensure=True)
     assert await retry.get(no_ack=True, fail=False) is None
+
+
+async def _drop_all_connections(container) -> None:
+    def run() -> None:
+        code, out = container.exec(["rabbitmqctl", "close_all_connections", "teste de queda"])
+        assert code == 0, out
+
+    await asyncio.to_thread(run)
+
+
+async def _publish_until_ok(pub: AmqpPublisher, event: Envelope, timeout_s: float) -> None:
+    async with asyncio.timeout(timeout_s):
+        while True:
+            try:
+                await pub.publish(event, event.type)
+                return
+            except Exception:  # noqa: BLE001 - reconectando
+                await asyncio.sleep(0.5)
+
+
+async def test_consumer_and_publisher_recover_after_connection_drop(
+    rabbitmq_url, rabbitmq_container, names, publisher
+):
+    exchange, queue = names
+    received: list[Envelope] = []
+    got = asyncio.Event()
+
+    async def handler(event: Envelope) -> None:
+        received.append(event)
+        got.set()
+
+    consumer = EventConsumer(
+        rabbitmq_url, exchange=exchange, queue=queue, bindings=["a.#"], handler=handler
+    )
+    await consumer.start()
+    try:
+        await publisher.publish(new_event("a.b.v1", "test", {}), "a.b.v1")
+        async with asyncio.timeout(5):
+            await got.wait()
+        got.clear()
+
+        await _drop_all_connections(rabbitmq_container)
+
+        after = new_event("a.c.v1", "test", {})
+        await _publish_until_ok(publisher, after, timeout_s=30)
+        async with asyncio.timeout(30):
+            await got.wait()
+    finally:
+        await consumer.stop()
+    assert received[-1] == after
+
+
+async def test_forward_to_missing_queue_does_not_ack_original(rabbitmq_url, channel, names):
+    exchange, queue = names
+    consumer = EventConsumer(
+        rabbitmq_url,
+        exchange=exchange,
+        queue=queue,
+        bindings=["a.#"],
+        handler=_never_called,
+        retry_delays_s=(1,),
+    )
+    await consumer.start()
+    try:
+        await channel.queue_delete(f"{queue}.dlq")
+        ex = await channel.get_exchange(exchange)
+        await ex.publish(aio_pika.Message(b"{quebrado"), routing_key="a.b.v1")
+        await asyncio.sleep(1.5)
+    finally:
+        await consumer.stop()
+    # Sem ack, a mensagem volta para a fila principal quando o consumidor fecha.
+    message = await _get(channel, queue, timeout_s=5)
+    assert message.body == b"{quebrado"
+
+
+async def _never_called(_event: Envelope) -> None:
+    raise AssertionError("handler não deveria rodar")
+
+
+async def test_retry_uses_the_delay_of_each_attempt(
+    rabbitmq_url, channel, names, publisher, otel_capture
+):
+    exchange, queue = names
+    loop = asyncio.get_running_loop()
+    seen: list[float] = []
+
+    async def handler(_event: Envelope) -> None:
+        seen.append(loop.time())
+        raise RuntimeError("sempre falha")
+
+    consumer = EventConsumer(
+        rabbitmq_url,
+        exchange=exchange,
+        queue=queue,
+        bindings=["a.#"],
+        handler=handler,
+        retry_delays_s=(1, 2, 3),
+    )
+    await consumer.start()
+    try:
+        await publisher.publish(new_event("a.b.v1", "test", {}), "a.b.v1")
+        dead = await _get(channel, f"{queue}.dlq", timeout_s=20)
+    finally:
+        await consumer.stop()
+
+    attempts = [
+        s.attributes["ks.event.attempt"]
+        for s in otel_capture.spans.get_finished_spans()
+        if s.name == f"{queue} process" and s.attributes is not None
+    ]
+    assert attempts == [0, 1, 2, 3]
+    gaps = [later - earlier for earlier, later in zip(seen, seen[1:], strict=False)]
+    for gap, delay in zip(gaps, (1, 2, 3), strict=True):
+        assert delay - 0.1 <= gap < delay + 0.8, gaps
+    assert dead.headers["x-attempt"] == 3

@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 
 from opentelemetry import metrics
@@ -28,6 +29,9 @@ from ks_platform.events import Envelope
 from ks_platform.messaging import EventPublisher
 
 logger = logging.getLogger("ks_platform.outbox")
+
+_CLEANUP_EVERY_S = 60.0
+_ALERT_ATTEMPTS = 10
 
 
 def outbox_table(metadata: MetaData) -> Table:
@@ -73,6 +77,7 @@ class OutboxRelay:
         self._batch_size = batch_size
         self._interval_s = interval_s
         self._retention = retention
+        self._last_cleanup: float | None = None
         self._backlog = metrics.get_meter("ks_platform.outbox").create_gauge(
             "outbox.backlog", unit="{row}", description="Linhas da outbox ainda não publicadas"
         )
@@ -101,9 +106,19 @@ class OutboxRelay:
                         row.type,
                         exc_info=True,
                     )
-                    await session.execute(
-                        update(t).where(t.c.id == row.id).values(attempts=t.c.attempts + 1)
+                    attempts = await session.scalar(
+                        update(t)
+                        .where(t.c.id == row.id)
+                        .values(attempts=t.c.attempts + 1)
+                        .returning(t.c.attempts)
                     )
+                    if attempts is not None and attempts >= _ALERT_ATTEMPTS:
+                        logger.error(
+                            "outbox: evento %s (%s) falhou %d vezes; a fila está travada",
+                            row.id,
+                            row.type,
+                            attempts,
+                        )
                     break
                 published.append(row.id)
             if published:
@@ -111,8 +126,11 @@ class OutboxRelay:
                     update(t).where(t.c.id.in_(published)).values(published_at=func.now())
                 )
         async with self._session_factory() as session, session.begin():
-            cutoff = datetime.now(UTC) - self._retention
-            await session.execute(delete(t).where(t.c.published_at < cutoff))
+            now = time.monotonic()
+            if self._last_cleanup is None or now - self._last_cleanup >= _CLEANUP_EVERY_S:
+                cutoff = datetime.now(UTC) - self._retention
+                await session.execute(delete(t).where(t.c.published_at < cutoff))
+                self._last_cleanup = now
             backlog = await session.scalar(
                 select(func.count()).select_from(t).where(t.c.published_at.is_(None))
             )

@@ -4,7 +4,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal, cast, overload
 
 import httpx
 import jwt
@@ -52,6 +52,17 @@ class Principal:
             if "*" in granted or perm in granted:
                 return True
         return False
+
+
+@dataclass(frozen=True)
+class ServicePrincipal:
+    """Chamador serviço a serviço (aud="service"); separado do Principal de usuário (Ruling S1)."""
+
+    client_id: str
+
+
+SERVICE_AUDIENCE = "service"
+_MAX_CLIENT_ID_LENGTH = 64
 
 
 async def _default_fetch(url: str) -> dict[str, Any]:
@@ -144,7 +155,13 @@ class TokenVerifier:
         self._keys = keys
         self._issuer = issuer
 
-    async def verify(self, token: str, audience: str) -> Principal:
+    @overload
+    async def verify(self, token: str, audience: Literal["service"]) -> ServicePrincipal: ...
+
+    @overload
+    async def verify(self, token: str, audience: str) -> Principal: ...
+
+    async def verify(self, token: str, audience: str) -> Principal | ServicePrincipal:
         try:
             kid = jwt.get_unverified_header(token).get("kid")
         except jwt.PyJWTError as exc:
@@ -166,7 +183,20 @@ class TokenVerifier:
             raise _forbidden("Token emitido para outra audiência.") from exc
         except jwt.PyJWTError as exc:
             raise _invalid_token("Token inválido ou expirado.") from exc
+        if audience == SERVICE_AUDIENCE:
+            return _service_principal_from_claims(claims)
         return _principal_from_claims(claims)
+
+
+def _service_principal_from_claims(claims: dict[str, Any]) -> ServicePrincipal:
+    sub = claims["sub"]
+    if (
+        claims.get("kind") != "service"
+        or not isinstance(sub, str)
+        or not 0 < len(sub) <= _MAX_CLIENT_ID_LENGTH
+    ):
+        raise _invalid_token("Claims inválidos.")
+    return ServicePrincipal(sub)
 
 
 def _principal_from_claims(claims: dict[str, Any]) -> Principal:
@@ -205,6 +235,14 @@ def require_audience(audience: str) -> Callable[..., Awaitable[Principal]]:
     async def dependency(request: Request) -> Principal:
         verifier: TokenVerifier = request.app.state.token_verifier
         return await verifier.verify(_bearer_token(request), audience)
+
+    return dependency
+
+
+def require_service() -> Callable[..., Awaitable[ServicePrincipal]]:
+    async def dependency(request: Request) -> ServicePrincipal:
+        verifier: TokenVerifier = request.app.state.token_verifier
+        return await verifier.verify(_bearer_token(request), SERVICE_AUDIENCE)
 
     return dependency
 

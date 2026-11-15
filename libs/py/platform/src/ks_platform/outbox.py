@@ -6,7 +6,9 @@ import logging
 import time
 from datetime import UTC, datetime, timedelta
 
+from opentelemetry import context as otel_context
 from opentelemetry import metrics
+from opentelemetry.propagate import extract, inject
 from sqlalchemy import (
     Column,
     DateTime,
@@ -45,6 +47,8 @@ def outbox_table(metadata: MetaData) -> Table:
         Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
         Column("published_at", DateTime(timezone=True), nullable=True),
         Column("attempts", Integer, nullable=False, server_default=text("0")),
+        # W3C traceparent da requisição que gravou o evento; o relay publica nesse contexto.
+        Column("traceparent", Text, nullable=True),
         Index(
             "ix_outbox_unpublished_created_at",
             "created_at",
@@ -53,10 +57,25 @@ def outbox_table(metadata: MetaData) -> Table:
     )
 
 
+def current_traceparent() -> str | None:
+    """`traceparent` W3C do contexto corrente, ou `None` sem span válido."""
+    carrier: dict[str, str] = {}
+    inject(carrier)
+    return carrier.get("traceparent")
+
+
 async def add_event(session: AsyncSession, table: Table, event: Envelope) -> None:
-    """Só faz o INSERT; quem chama controla a transação (a mesma da mudança de domínio)."""
+    """Só faz o INSERT; quem chama controla a transação (a mesma da mudança de domínio).
+
+    Guarda o `traceparent` corrente para o evento sair no trace da requisição que o gerou.
+    """
     await session.execute(
-        insert(table).values(id=event.id, type=event.type, payload=event.to_dict())
+        insert(table).values(
+            id=event.id,
+            type=event.type,
+            payload=event.to_dict(),
+            traceparent=current_traceparent(),
+        )
     )
 
 
@@ -89,7 +108,7 @@ class OutboxRelay:
         async with self._session_factory() as session, session.begin():
             rows = (
                 await session.execute(
-                    select(t.c.id, t.c.type, t.c.payload)
+                    select(t.c.id, t.c.type, t.c.payload, t.c.traceparent)
                     .where(t.c.published_at.is_(None))
                     .order_by(t.c.created_at, t.c.id)
                     .limit(self._batch_size)
@@ -98,7 +117,7 @@ class OutboxRelay:
             ).all()
             for row in rows:
                 try:
-                    await self._publisher.publish(Envelope.from_dict(row.payload), row.type)
+                    await self._publish(row.payload, row.type, row.traceparent)
                 except Exception:
                     logger.warning(
                         "outbox: falha ao publicar evento %s (%s); lote interrompido",
@@ -136,6 +155,18 @@ class OutboxRelay:
             )
         self._backlog.set(backlog or 0)
         return len(published)
+
+    async def _publish(self, payload: object, routing_key: str, traceparent: str | None) -> None:
+        """Publica no contexto de trace guardado na linha (sem ele, no contexto corrente)."""
+        event = Envelope.from_dict(payload)
+        if traceparent is None:
+            await self._publisher.publish(event, routing_key)
+            return
+        token = otel_context.attach(extract({"traceparent": traceparent}))
+        try:
+            await self._publisher.publish(event, routing_key)
+        finally:
+            otel_context.detach(token)
 
     async def run_forever(self, stop: asyncio.Event) -> None:
         """Roda até `stop`; lote cheio repete na hora, senão espera `interval_s`."""

@@ -1,11 +1,17 @@
-"""Casos de uso do admin do catálogo. Cada método roda numa transação própria."""
+"""Casos de uso do admin do catálogo. Cada método roda numa transação própria.
+
+Os eventos de domínio (preço, estoque, arquivamento) entram na outbox dentro dessa mesma
+transação. Cada evento de variante leva uma `version` nova da variante, porque o carrinho
+descarta evento com `version` menor ou igual à que já guardou."""
 
 import uuid
 from datetime import datetime
 from typing import Any
 
+from catalog.application import events
 from catalog.application.cursor import decode_cursor, encode_cursor, invalid_cursor
 from catalog.application.ports import (
+    CatalogUnitOfWork,
     CategoryRecord,
     CollectionRecord,
     ImageRecord,
@@ -270,6 +276,8 @@ class AdminCatalogService:
         self, product_id: uuid.UUID, version: int, fields: dict[str, Any]
     ) -> ProductRecord:
         async with self._uow() as uow:
+            # Trava o produto: o preço base antigo dos eventos é o que esta escrita substitui.
+            before = await uow.products.get(product_id, for_update=True)
             updates = dict(fields)
             if "category_id" in updates:
                 category = await uow.taxonomy.get_category(updates["category_id"])
@@ -283,9 +291,25 @@ class AdminCatalogService:
                 if await uow.products.get(product_id) is None:
                     raise CatalogError(PRODUCT_NOT_FOUND)
                 raise CatalogError(PRODUCT_VERSION_CONFLICT)
+            assert before is not None  # noqa: S101 - update_versioned aplicou
             if "base_price_cents" in updates:
                 await uow.products.recompute_min_price(product_id)
+                old_base, new_base = before.base_price_cents, updates["base_price_cents"]
+                if new_base != old_base:
+                    await self._emit_base_price_changed(uow, before, old_base, new_base)
             return await self._load(uow.products, product_id)
+
+    @staticmethod
+    async def _emit_base_price_changed(
+        uow: CatalogUnitOfWork, before: ProductRecord, old_base: int, new_base: int
+    ) -> None:
+        """Um `price_changed` por variante sem preço próprio (herdam o preço base)."""
+        inheriting = [v.id for v in before.variants if v.price_cents is None]
+        await uow.products.bump_variant_versions(inheriting)
+        for variant_id in inheriting:
+            variant = await uow.products.get_variant(variant_id)
+            assert variant is not None  # noqa: S101
+            await uow.outbox.add(events.price_changed(variant, old_base, new_base))
 
     async def generate_variants(
         self, product_id: uuid.UUID, colors: list[str], sizes: list[str]
@@ -317,13 +341,29 @@ class AdminCatalogService:
         self, variant_id: uuid.UUID, version: int, fields: dict[str, Any]
     ) -> VariantRecord:
         async with self._uow() as uow:
+            before = await uow.products.get_variant(variant_id, for_update=True)
+            if before is None:
+                raise CatalogError(VARIANT_NOT_FOUND)
             if not await uow.products.update_variant_versioned(variant_id, version, fields):
-                if await uow.products.get_variant(variant_id) is None:
-                    raise CatalogError(VARIANT_NOT_FOUND)
                 raise CatalogError(VARIANT_VERSION_CONFLICT)
             variant = await uow.products.get_variant(variant_id)
             assert variant is not None  # noqa: S101
             await uow.products.recompute_min_price(variant.product_id)
+            product = await uow.products.get(variant.product_id)
+            assert product is not None  # noqa: S101
+            base = product.base_price_cents
+            old_price = effective_price(base, before.price_cents)
+            new_price = effective_price(base, variant.price_cents)
+            price_moved = new_price != old_price
+            if price_moved:
+                await uow.outbox.add(events.price_changed(variant, old_price, new_price))
+            if variant.active != before.active:
+                if price_moved:
+                    # Segundo evento da mesma escrita: versão própria para não ser descartado.
+                    await uow.products.bump_variant_versions([variant_id])
+                    variant = await uow.products.get_variant(variant_id)
+                    assert variant is not None  # noqa: S101
+                await uow.outbox.add(events.stock_changed(variant))
             return variant
 
     # ------------------------------------------------------------------------ imagens
@@ -418,7 +458,9 @@ class AdminCatalogService:
             if await uow.products.get(product_id, for_update=True) is None:
                 raise CatalogError(PRODUCT_NOT_FOUND)
             await uow.products.set_status(product_id, "archived")
-            return await self._load(uow.products, product_id)
+            product = await self._load(uow.products, product_id)
+            await uow.outbox.add(events.product_archived(product))
+            return product
 
     @staticmethod
     async def _load(products: ProductRepository, product_id: uuid.UUID) -> ProductRecord:
@@ -451,6 +493,7 @@ class AdminCatalogService:
             movement = await uow.stock.apply(variant_id, new_on_hand, delta, reason, note, actor_id)
             updated = await uow.products.get_variant(variant_id)
             assert updated is not None  # noqa: S101
+            await uow.outbox.add(events.stock_changed(updated))
             return movement, updated
 
     async def list_movements(

@@ -20,6 +20,8 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from ks_platform.outbox import outbox_table
+
 # Expressão da coluna gerada `products.search_vector`; a migração usa o mesmo texto.
 SEARCH_VECTOR_SQL = (
     "setweight(to_tsvector('portuguese', immutable_unaccent(name)), 'A') || "
@@ -210,3 +212,7 @@ class StorefrontSettings(Base):
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=1)
     data: Mapped[dict[str, Any]] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = _updated()
+
+
+# Outbox transacional (ks_platform); a migração 0003 cria a mesma tabela.
+outbox = outbox_table(Base.metadata)

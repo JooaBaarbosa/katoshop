@@ -12,3 +12,5 @@ class CatalogSettings(BaseServiceSettings):
     jwks_url: str = "http://identity:8000/.well-known/jwks.json"
     media_root: Path = Path("/data/media")
     public_base_url: str = "http://api.katoshop.localhost/catalog"
+    # Sem broker o relay não sobe; os eventos continuam acumulando na outbox.
+    amqp_url: str | None = None

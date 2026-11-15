@@ -29,6 +29,7 @@ from catalog.adapters.models import (
     StockMovement,
     StorefrontSettings,
     Variant,
+    outbox,
 )
 from catalog.application.ports import (
     CatalogUnitOfWork,
@@ -47,6 +48,8 @@ from catalog.application.ports import (
     VariantRecord,
 )
 from catalog.domain.variants import NewVariant
+from ks_platform.events import Envelope
+from ks_platform.outbox import add_event
 
 # Updates em lote não sincronizam a identity map; leituras usam populate_existing.
 _NO_SYNC = {"synchronize_session": False}
@@ -492,6 +495,14 @@ class SqlProductRepository:
         )
         return await self._s.scalar(stmt.execution_options(**_NO_SYNC)) is not None
 
+    async def bump_variant_versions(self, variant_ids: list[uuid.UUID]) -> None:
+        if not variant_ids:
+            return
+        stmt = (
+            update(Variant).where(Variant.id.in_(variant_ids)).values(version=Variant.version + 1)
+        )
+        await self._s.execute(stmt.execution_options(**_NO_SYNC))
+
 
 class SqlStockRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -512,7 +523,11 @@ class SqlStockRepository:
         self._s.add(movement)
         await self._s.flush()
         await self._s.refresh(movement, ["created_at"])
-        stmt = update(Variant).where(Variant.id == variant_id).values(stock_on_hand=new_on_hand)
+        stmt = (
+            update(Variant)
+            .where(Variant.id == variant_id)
+            .values(stock_on_hand=new_on_hand, version=Variant.version + 1)
+        )
         await self._s.execute(stmt.execution_options(**_NO_SYNC))
         return _movement(movement)
 
@@ -579,12 +594,21 @@ class SqlSettingsRepository:
         await self._s.execute(stmt)
 
 
+class SqlOutbox:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def add(self, event: Envelope) -> None:
+        await add_event(self._s, outbox, event)
+
+
 class SqlCatalogUnitOfWork:
     def __init__(self, session: AsyncSession) -> None:
         self._taxonomy = SqlTaxonomyRepository(session)
         self._products = SqlProductRepository(session)
         self._stock = SqlStockRepository(session)
         self._settings = SqlSettingsRepository(session)
+        self._outbox = SqlOutbox(session)
 
     @property
     def taxonomy(self) -> SqlTaxonomyRepository:
@@ -601,6 +625,10 @@ class SqlCatalogUnitOfWork:
     @property
     def settings(self) -> SqlSettingsRepository:
         return self._settings
+
+    @property
+    def outbox(self) -> SqlOutbox:
+        return self._outbox
 
 
 def sql_unit_of_work(session_factory: async_sessionmaker[AsyncSession]) -> UnitOfWorkFactory:

@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from catalog.domain.variants import NewVariant
+from ks_platform.events import Envelope
 
 # ---------------------------------------------------------------------------- registros
 
@@ -225,6 +226,10 @@ class ProductRepository(Protocol):
         self, variant_id: uuid.UUID, expected_version: int, fields: dict[str, Any]
     ) -> bool: ...
 
+    async def bump_variant_versions(self, variant_ids: list[uuid.UUID]) -> None:
+        """Incrementa `version` das variantes: cada evento emitido leva uma versão nova."""
+        ...
+
     async def add_image(
         self,
         product_id: uuid.UUID,
@@ -256,7 +261,8 @@ class StockRepository(Protocol):
         note: str | None,
         actor_id: uuid.UUID,
     ) -> MovementRecord:
-        """Grava o movimento e o novo saldo na transação corrente (variante já travada)."""
+        """Grava o movimento e o novo saldo (incrementando `version` da variante) na
+        transação corrente, com a variante já travada."""
         ...
 
     async def list_movements(
@@ -270,6 +276,12 @@ class SettingsRepository(Protocol):
     async def put(self, data: dict[str, Any]) -> None: ...
 
 
+class Outbox(Protocol):
+    async def add(self, event: Envelope) -> None:
+        """Grava o evento na outbox, na transação corrente."""
+        ...
+
+
 class CatalogUnitOfWork(Protocol):
     """Repositórios que compartilham uma única sessão e transação."""
 
@@ -281,6 +293,8 @@ class CatalogUnitOfWork(Protocol):
     def stock(self) -> StockRepository: ...
     @property
     def settings(self) -> SettingsRepository: ...
+    @property
+    def outbox(self) -> Outbox: ...
 
 
 type UnitOfWorkFactory = Callable[[], AbstractAsyncContextManager[CatalogUnitOfWork]]

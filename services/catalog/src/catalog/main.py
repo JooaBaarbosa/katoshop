@@ -1,21 +1,26 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from catalog.adapters.models import outbox
 from catalog.adapters.repositories import sql_unit_of_work
 from catalog.adapters.storage_local import LocalImageStorage
 from catalog.api.routes_admin import router as admin_router
 from catalog.api.routes_media import router as media_router
 from catalog.api.routes_public import router as public_router
 from catalog.application.admin_service import AdminCatalogService
+from catalog.application.events import EVENTS_EXCHANGE
 from catalog.settings import CatalogSettings
 from ks_platform.auth import JwksKeyProvider, TokenVerifier
 from ks_platform.db import make_engine, make_session_factory
 from ks_platform.errors import install_db_error_handler, install_problem_handlers
 from ks_platform.health import health_router
+from ks_platform.messaging import AmqpPublisher
 from ks_platform.observability import configure_logging, configure_observability
+from ks_platform.outbox import OutboxRelay
 
 
 def create_app(settings: CatalogSettings | None = None) -> FastAPI:
@@ -31,10 +36,25 @@ def create_app(settings: CatalogSettings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        stop = asyncio.Event()
+        publisher: AmqpPublisher | None = None
+        relay_task: asyncio.Task[None] | None = None
+        if settings.amqp_url:
+            # O publisher conecta sob demanda: broker fora não impede o serviço de subir.
+            publisher = AmqpPublisher(settings.amqp_url, EVENTS_EXCHANGE)
+            relay = OutboxRelay(session_factory, outbox, publisher)
+            relay_task = asyncio.create_task(relay.run_forever(stop), name="outbox-relay")
         try:
             yield
         finally:
-            await engine.dispose()
+            stop.set()
+            try:
+                if relay_task is not None:
+                    await relay_task
+            finally:
+                if publisher is not None:
+                    await publisher.close()
+                await engine.dispose()
 
     app = FastAPI(title="KatoShop catalog", lifespan=lifespan)
     app.state.settings = settings

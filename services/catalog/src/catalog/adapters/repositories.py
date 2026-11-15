@@ -503,6 +503,27 @@ class SqlProductRepository:
         )
         await self._s.execute(stmt.execution_options(**_NO_SYNC))
 
+    async def bump_inheriting_variants(self, product_id: uuid.UUID) -> list[VariantRecord]:
+        stmt = (
+            update(Variant)
+            .where(Variant.product_id == product_id, Variant.price_cents.is_(None))
+            .values(version=Variant.version + 1)
+            .returning(
+                Variant.id,
+                Variant.product_id,
+                Variant.sku,
+                Variant.color_code,
+                Variant.size_code,
+                Variant.price_cents,
+                Variant.stock_on_hand,
+                Variant.stock_reserved,
+                Variant.version,
+                Variant.active,
+            )
+        )
+        rows = await self._s.execute(stmt.execution_options(**_NO_SYNC))
+        return sorted((VariantRecord(*row) for row in rows), key=lambda v: v.id)
+
 
 class SqlStockRepository:
     def __init__(self, session: AsyncSession) -> None:

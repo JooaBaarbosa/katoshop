@@ -3,7 +3,8 @@
 import asyncio
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Any, cast
 
 import aio_pika
 import httpx
@@ -14,12 +15,15 @@ from sqlalchemy import select
 from testcontainers.core.container import DockerContainer
 
 from catalog.adapters.models import outbox
+from catalog.adapters.repositories import sql_unit_of_work
+from catalog.application.admin_service import AdminCatalogService
 from catalog.application.events import (
     EVENTS_EXCHANGE,
     PRICE_CHANGED,
     PRODUCT_ARCHIVED,
     STOCK_CHANGED,
 )
+from catalog.application.ports import CatalogUnitOfWork
 from ks_platform.events import Envelope
 from ks_platform.messaging import AmqpPublisher
 from ks_platform.outbox import OutboxRelay
@@ -211,6 +215,18 @@ async def test_archive_emits_product_archived_with_all_variant_ids(
     }
 
 
+async def test_archive_twice_emits_a_single_event(
+    app: FastAPI, admin_client: httpx.AsyncClient, make_product: Factory
+) -> None:
+    product = await make_product()
+    await _generate(admin_client, product["id"], ["M"])
+    for _ in range(2):
+        response = await admin_client.post(f"/v1/admin/products/{product['id']}/archive")
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "archived"
+    assert len(await _events(app, PRODUCT_ARCHIVED, "product_id", product["id"])) == 1
+
+
 async def test_failed_write_rolls_back_event(
     app: FastAPI, admin_client: httpx.AsyncClient, make_variant: Factory
 ) -> None:
@@ -315,3 +331,121 @@ async def test_writes_succeed_while_broker_down_and_relay_catches_up(
     assert received.data["available"] == 3
     [row] = await _rows(app, STOCK_CHANGED, "variant_id", variant["id"])
     assert row.published_at is not None
+
+
+# ---------------------------------------------------------------------------- concorrência
+
+_HOLD_S = 0.4
+_START_GAP_S = 0.1
+
+
+class _PausingProducts:
+    """Repositório de produtos que pausa logo depois de `method`, ainda dentro da transação."""
+
+    def __init__(self, inner: Any, method: str) -> None:
+        self._inner = inner
+        self._method = method
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._inner, name)
+        if name != self._method:
+            return attr
+
+        async def paused(*args: Any, **kwargs: Any) -> Any:
+            result = await attr(*args, **kwargs)
+            await asyncio.sleep(_HOLD_S)
+            return result
+
+        return paused
+
+
+class _PausingUow:
+    def __init__(self, inner: CatalogUnitOfWork, method: str) -> None:
+        self._inner = inner
+        self.products = _PausingProducts(inner.products, method)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def _slow_service(app: FastAPI, pause_after: str) -> AdminCatalogService:
+    """Serviço que pausa `_HOLD_S` depois de `pause_after` (com as travas já tomadas até ali)
+    e de novo antes do commit, abrindo a janela para a outra transação entrar no meio."""
+    open_uow = sql_unit_of_work(app.state.session_factory)
+
+    @asynccontextmanager
+    async def slow_uow() -> AsyncIterator[CatalogUnitOfWork]:
+        async with open_uow() as uow:
+            yield cast(CatalogUnitOfWork, _PausingUow(uow, pause_after))
+            await asyncio.sleep(_HOLD_S)
+
+    return AdminCatalogService(slow_uow, app.state.image_storage)
+
+
+async def _after_gap[T](operation: Awaitable[T]) -> T:
+    await asyncio.sleep(_START_GAP_S)
+    return await operation
+
+
+async def _last_price_event(app: FastAPI, variant_id: str) -> Envelope:
+    events = await _events(app, PRICE_CHANGED, "variant_id", variant_id)
+    return max(events, key=lambda e: e.data["version"])
+
+
+async def _variants(admin_client: httpx.AsyncClient, product_id: str) -> dict[str, Json]:
+    product = (await admin_client.get(f"/v1/admin/products/{product_id}")).json()
+    return {v["id"]: v for v in product["variants"]}
+
+
+async def test_base_price_change_racing_own_price_does_not_emit_base_for_it(
+    app: FastAPI, admin_client: httpx.AsyncClient, make_product: Factory
+) -> None:
+    """A variante ganha preço próprio numa transação lenta; a troca do preço base começa no
+    meio dela. O último evento da variante tem de ser o do preço próprio."""
+    product = await make_product(base_price_cents=24900)
+    target, other = (await _generate(admin_client, product["id"], ["M", "G"]))["variants"]
+    service = app.state.admin_service
+
+    await asyncio.gather(
+        _slow_service(app, "update_variant_versioned").update_variant(
+            uuid.UUID(target["id"]), target["version"], {"price_cents": 29900}
+        ),
+        _after_gap(
+            service.update_product(uuid.UUID(product["id"]), 1, {"base_price_cents": 15900})
+        ),
+    )
+
+    final = await _variants(admin_client, product["id"])
+    assert final[target["id"]]["price_cents"] == 29900
+    target_events = await _events(app, PRICE_CHANGED, "variant_id", target["id"])
+    assert [e.data["new_price_cents"] for e in target_events] == [29900]
+    assert target_events[0].data["version"] == final[target["id"]]["version"]
+    other_last = await _last_price_event(app, other["id"])
+    assert other_last.data["new_price_cents"] == 15900
+    assert other_last.data["version"] == final[other["id"]]["version"]
+
+
+async def test_clearing_own_price_racing_base_change_gets_the_new_base(
+    app: FastAPI, admin_client: httpx.AsyncClient, make_product: Factory
+) -> None:
+    """A troca do preço base roda numa transação lenta; a variante perde o preço próprio no
+    meio dela. Ela passa a herdar, e o último evento precisa trazer o preço base novo."""
+    product = await make_product(base_price_cents=24900)
+    variant = (await _generate(admin_client, product["id"], ["M"]))["variants"][0]
+    own = await _patch_variant(admin_client, variant, price_cents=29900)
+    service = app.state.admin_service
+
+    await asyncio.gather(
+        _slow_service(app, "update_versioned").update_product(
+            uuid.UUID(product["id"]), 1, {"base_price_cents": 15900}
+        ),
+        _after_gap(
+            service.update_variant(uuid.UUID(own["id"]), own["version"], {"price_cents": None})
+        ),
+    )
+
+    final = (await _variants(admin_client, product["id"]))[variant["id"]]
+    assert final["price_cents"] is None
+    last = await _last_price_event(app, variant["id"])
+    assert (last.data["old_price_cents"], last.data["new_price_cents"]) == (29900, 15900)
+    assert last.data["version"] == final["version"]

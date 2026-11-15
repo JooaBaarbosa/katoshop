@@ -296,19 +296,16 @@ class AdminCatalogService:
                 await uow.products.recompute_min_price(product_id)
                 old_base, new_base = before.base_price_cents, updates["base_price_cents"]
                 if new_base != old_base:
-                    await self._emit_base_price_changed(uow, before, old_base, new_base)
+                    await self._emit_base_price_changed(uow, product_id, old_base, new_base)
             return await self._load(uow.products, product_id)
 
     @staticmethod
     async def _emit_base_price_changed(
-        uow: CatalogUnitOfWork, before: ProductRecord, old_base: int, new_base: int
+        uow: CatalogUnitOfWork, product_id: uuid.UUID, old_base: int, new_base: int
     ) -> None:
-        """Um `price_changed` por variante sem preço próprio (herdam o preço base)."""
-        inheriting = [v.id for v in before.variants if v.price_cents is None]
-        await uow.products.bump_variant_versions(inheriting)
-        for variant_id in inheriting:
-            variant = await uow.products.get_variant(variant_id)
-            assert variant is not None  # noqa: S101
+        """Um `price_changed` por variante sem preço próprio (herdam o preço base). Quem
+        herda é decidido pelo UPDATE, com o produto travado (update_variant trava antes)."""
+        for variant in await uow.products.bump_inheriting_variants(product_id):
             await uow.outbox.add(events.price_changed(variant, old_base, new_base))
 
     async def generate_variants(
@@ -341,16 +338,19 @@ class AdminCatalogService:
         self, variant_id: uuid.UUID, version: int, fields: dict[str, Any]
     ) -> VariantRecord:
         async with self._uow() as uow:
-            before = await uow.products.get_variant(variant_id, for_update=True)
-            if before is None:
+            found = await uow.products.get_variant(variant_id)
+            if found is None:
                 raise CatalogError(VARIANT_NOT_FOUND)
+            # Mesma ordem de travas do update_product (produto, depois variantes): o preço base
+            # lido aqui não muda até o commit e uma troca de base não vê esta variante pela metade.
+            product = await uow.products.get(found.product_id, for_update=True)
+            before = await uow.products.get_variant(variant_id, for_update=True)
+            assert product is not None and before is not None  # noqa: S101 - FK em cascata
             if not await uow.products.update_variant_versioned(variant_id, version, fields):
                 raise CatalogError(VARIANT_VERSION_CONFLICT)
             variant = await uow.products.get_variant(variant_id)
             assert variant is not None  # noqa: S101
             await uow.products.recompute_min_price(variant.product_id)
-            product = await uow.products.get(variant.product_id)
-            assert product is not None  # noqa: S101
             base = product.base_price_cents
             old_price = effective_price(base, before.price_cents)
             new_price = effective_price(base, variant.price_cents)
@@ -455,8 +455,11 @@ class AdminCatalogService:
 
     async def archive(self, product_id: uuid.UUID) -> ProductRecord:
         async with self._uow() as uow:
-            if await uow.products.get(product_id, for_update=True) is None:
+            current = await uow.products.get(product_id, for_update=True)
+            if current is None:
                 raise CatalogError(PRODUCT_NOT_FOUND)
+            if current.status == "archived":
+                return current  # já arquivado: nada muda e nenhum evento sai
             await uow.products.set_status(product_id, "archived")
             product = await self._load(uow.products, product_id)
             await uow.outbox.add(events.product_archived(product))

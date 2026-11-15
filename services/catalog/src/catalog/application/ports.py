@@ -230,6 +230,11 @@ class ProductRepository(Protocol):
         """Incrementa `version` das variantes: cada evento emitido leva uma versão nova."""
         ...
 
+    async def bump_inheriting_variants(self, product_id: uuid.UUID) -> list[VariantRecord]:
+        """Incrementa `version` das variantes do produto sem preço próprio, decidido no
+        próprio UPDATE (estado corrente, não um snapshot), e devolve as variantes afetadas."""
+        ...
+
     async def add_image(
         self,
         product_id: uuid.UUID,

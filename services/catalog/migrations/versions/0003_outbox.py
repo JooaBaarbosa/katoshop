@@ -28,6 +28,7 @@ def upgrade() -> None:
         ),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column("traceparent", sa.Text(), nullable=True),
     )
     # O relay só lê linhas pendentes, em ordem de gravação.
     op.create_index(

@@ -4,7 +4,13 @@ from typing import Any
 import httpx
 import structlog
 
-from cart.adapters._service_call import ServiceUnavailableError, call_service
+from cart.adapters._service_call import (
+    ServiceUnavailableError,
+    bool_value,
+    call_service,
+    canonical_uuid,
+    int_value,
+)
 from cart.domain.cart import CartItem
 from ks_platform.service_tokens import ServiceTokenProvider
 
@@ -27,8 +33,13 @@ def _unavailable() -> CouponResult:
 
 class PromotionsClient:
     def __init__(
-        self, base_url: str, tokens: ServiceTokenProvider, http: httpx.AsyncClient
+        self,
+        base_url: str,
+        tokens: ServiceTokenProvider,
+        http: httpx.AsyncClient,
+        timeout_s: float = 2.0,
     ) -> None:
+        self._timeout_s = timeout_s
         self._base_url = base_url.rstrip("/")
         self._tokens = tokens
         self._http = http
@@ -62,6 +73,7 @@ class PromotionsClient:
                 f"{self._base_url}/v1/promotions/evaluate",
                 target="promotions",
                 json=body,
+                timeout_s=self._timeout_s,
             )
         except ServiceUnavailableError:
             return _unavailable()
@@ -70,13 +82,23 @@ class PromotionsClient:
             return _unavailable()
         try:
             data = response.json()
+            reason = data["reason"]
+            if reason is not None and not isinstance(reason, str):
+                raise ValueError("reason inválido")
+            min_order = data["min_order_cents"]
+            if min_order is not None:
+                min_order = int_value(min_order)
             return CouponResult(
-                valid=data["valid"],
-                discount_cents=data["discount_cents"],
-                per_item={str(p["variant_id"]): p["discount_cents"] for p in data["per_item"]},
-                reason=data["reason"],
-                min_order_cents=data["min_order_cents"],
+                valid=bool_value(data["valid"]),
+                discount_cents=int_value(data["discount_cents"]),
+                # Mesma chave canônica (UUID minúsculo) que o carrinho usa para as variantes.
+                per_item={
+                    canonical_uuid(p["variant_id"]): int_value(p["discount_cents"])
+                    for p in data["per_item"]
+                },
+                reason=reason,
+                min_order_cents=min_order,
             )
-        except (KeyError, TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
             log.warning("promotions.invalid_body", error=type(exc).__name__)
             return _unavailable()

@@ -42,8 +42,14 @@ class ServiceTokenProvider:
         if self._owns_http:
             await self._http.aclose()
 
-    def invalidate(self) -> None:
-        """Descarta o token em cache (ex.: um 401 do destino); o próximo `token()` renova."""
+    def invalidate(self, stale_token: str | None = None) -> None:
+        """Descarta o token em cache (ex.: um 401 do destino); o próximo `token()` renova.
+
+        Com `stale_token`, só descarta se for o token em cache: assim uma chamada concorrente
+        não joga fora o token novo que outra já obteve.
+        """
+        if stale_token is not None and self._token != stale_token:
+            return
         self._token = None
         self._renew_at = 0.0
 

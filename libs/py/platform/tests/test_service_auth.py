@@ -256,3 +256,14 @@ async def test_provider_invalidate_forces_new_token() -> None:
     provider.invalidate()
     assert await provider.token() == "tok2"
     assert server.calls == 2
+
+
+async def test_provider_invalidate_with_stale_token_keeps_newer_token() -> None:
+    server, clock = TokenServer(), FakeClock()
+    provider = _provider(server, clock)
+    assert await provider.token() == "tok1"
+    provider.invalidate("tok1")
+    assert await provider.token() == "tok2"
+    provider.invalidate("tok1")  # chamada concorrente com o token já trocado: no-op
+    assert await provider.token() == "tok2"
+    assert server.calls == 2

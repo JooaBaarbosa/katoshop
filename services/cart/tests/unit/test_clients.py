@@ -271,3 +271,98 @@ async def test_evaluate_401_retries_once_then_unavailable() -> None:
     result = await _promotions(handler).evaluate("X", None, [_item()])
     assert result.reason == "promotions.unavailable"
     assert calls == 2
+
+
+@pytest.mark.parametrize(
+    "bad", ["../x", "abc?a=b", "a/b", "id\x00x", "id\nx", "", " " + VID + "/.."]
+)
+async def test_variant_invalid_id_is_not_found_without_calling(bad: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("não deve chamar")
+
+    with pytest.raises(CartError) as exc:
+        await _catalog(handler).variant(bad)
+    assert (exc.value.code, exc.value.extra) == ("cart.item.not_found", {"status": 404})
+
+
+async def test_variant_uses_canonical_lowercase_id_in_url() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_variant())
+
+    await _catalog(handler).variant(VID.upper())
+    assert seen[0].url.path == f"/v1/internal/variants/{VID}"
+
+
+async def test_catalog_request_carries_timeout() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_variant())
+
+    await _catalog(handler).variant(VID)
+    assert seen[0].extensions["timeout"] == {"connect": 2.0, "read": 2.0, "write": 2.0, "pool": 2.0}
+
+
+async def test_promotions_request_carries_timeout() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_OK)
+
+    client = PromotionsClient("http://promotions", _tokens(), _http(handler), timeout_s=1.5)
+    await client.evaluate("X", None, [_item()])
+    assert seen[0].extensions["timeout"]["read"] == 1.5
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(200, text="<html>nope</html>"),
+        httpx.Response(200, json=[1, 2]),
+        httpx.Response(200, json=_variant(unit_price_cents="59")),
+        httpx.Response(200, json=_variant(unit_price_cents=True)),
+        httpx.Response(200, json=_variant(available="7")),
+        httpx.Response(200, json=_variant(active="yes")),
+        httpx.Response(200, json=_variant(collection_slugs="verao")),
+        httpx.Response(200, json=_variant(variant_id="nao-uuid")),
+        httpx.Response(200, json=_variant(version=None)),
+    ],
+)
+async def test_variant_malformed_body_is_unavailable(response: httpx.Response) -> None:
+    with pytest.raises(CartError) as exc:
+        await _catalog(lambda r: response).variant(VID)
+    assert exc.value.code == "cart.catalog.unavailable"
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(200, text="<html>nope</html>"),
+        httpx.Response(200, json=[1]),
+        httpx.Response(200, json={**_OK, "valid": "true"}),
+        httpx.Response(200, json={**_OK, "discount_cents": "10"}),
+        httpx.Response(200, json={**_OK, "discount_cents": True}),
+        httpx.Response(200, json={**_OK, "per_item": [{"variant_id": VID}]}),
+        httpx.Response(200, json={**_OK, "per_item": [{"variant_id": "x", "discount_cents": 1}]}),
+        httpx.Response(200, json={**_OK, "per_item": [1]}),
+        httpx.Response(200, json={**_OK, "per_item": None}),
+        httpx.Response(200, json={**_OK, "reason": 5}),
+        httpx.Response(200, json={**_OK, "min_order_cents": "1"}),
+    ],
+)
+async def test_evaluate_malformed_body_is_unavailable(response: httpx.Response) -> None:
+    result = await _promotions(lambda r: response).evaluate("X", None, [_item()])
+    assert result == CouponResult(valid=False, reason="promotions.unavailable")
+
+
+async def test_evaluate_per_item_keys_are_canonical_lowercase() -> None:
+    body = {**_OK, "per_item": [{"variant_id": VID.upper(), "discount_cents": 1198}]}
+    result = await _promotions(lambda r: httpx.Response(200, json=body)).evaluate(
+        "X", None, [_item()]
+    )
+    assert result.per_item == {VID: 1198}

@@ -13,6 +13,7 @@ from ks_platform.observability import configure_logging, configure_observability
 def create_app(settings: CartSettings | None = None, redis_client: Redis | None = None) -> FastAPI:
     settings = settings or CartSettings()  # pyright: ignore[reportCallIssue]
     configure_logging(settings.service_name, settings.log_level)
+    owns_redis = redis_client is None
     redis = redis_client or Redis.from_url(
         settings.redis_url, socket_connect_timeout=2, socket_timeout=2
     )
@@ -25,7 +26,8 @@ def create_app(settings: CartSettings | None = None, redis_client: Redis | None 
         try:
             yield
         finally:
-            await redis.aclose()
+            if owns_redis:
+                await redis.aclose()
 
     app = FastAPI(title="KatoShop cart", lifespan=lifespan)
     app.state.settings = settings

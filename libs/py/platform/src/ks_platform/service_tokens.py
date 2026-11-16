@@ -42,6 +42,11 @@ class ServiceTokenProvider:
         if self._owns_http:
             await self._http.aclose()
 
+    def invalidate(self) -> None:
+        """Descarta o token em cache (ex.: um 401 do destino); o próximo `token()` renova."""
+        self._token = None
+        self._renew_at = 0.0
+
     def _fresh(self) -> bool:
         return self._token is not None and self._clock() < self._renew_at
 

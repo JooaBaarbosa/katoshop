@@ -247,3 +247,12 @@ async def test_provider_aclose_closes_only_owned_client() -> None:
     owned = ServiceTokenProvider("http://x", "c", "s")
     await owned.aclose()
     assert owned._http.is_closed  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_provider_invalidate_forces_new_token() -> None:
+    server, clock = TokenServer(), FakeClock()
+    provider = _provider(server, clock)
+    assert await provider.token() == "tok1"
+    provider.invalidate()
+    assert await provider.token() == "tok2"
+    assert server.calls == 2

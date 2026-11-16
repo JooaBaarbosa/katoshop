@@ -38,4 +38,4 @@ exclude = ["**/.venv", "**/node_modules"]
 extraPaths = ["libs/py/platform/tests"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ks_platform", "identity", "catalog", "seed"]
+known-first-party = ["ks_platform", "identity", "catalog", "promotions", "seed"]

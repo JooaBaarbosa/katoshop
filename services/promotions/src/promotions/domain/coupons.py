@@ -10,8 +10,9 @@ _PREFIX = "promotions.coupon."
 
 
 def normalize_code(raw: str) -> str:
-    code = raw.strip().upper()
-    if not _CODE_RE.fullmatch(code):
+    stripped = raw.strip()
+    code = stripped.upper()
+    if not stripped.isascii() or not _CODE_RE.fullmatch(code):
         raise ValueError("invalid coupon code")
     return code
 
@@ -67,13 +68,21 @@ def _is_eligible(rule: CouponRule, item: LineItem) -> bool:
 
 def allocate(discount_cents: int, eligible: list[LineItem]) -> dict[str, int]:
     total = sum(i.weight for i in eligible)
+    if discount_cents > total:
+        raise ValueError("discount exceeds eligible total")
     if not eligible or total == 0:
         return {i.variant_id: 0 for i in eligible}
     parts = {i.variant_id: discount_cents * i.weight // total for i in eligible}
     remainder = discount_cents - sum(parts.values())
-    if remainder:
-        top = min(eligible, key=lambda i: (-i.weight, i.variant_id))
-        parts[top.variant_id] += remainder
+    ordered = sorted(eligible, key=lambda i: (-i.weight, i.variant_id))
+    # discount <= total garante capacidade livre enquanto sobrar resto.
+    while remainder > 0:
+        for i in ordered:
+            if remainder == 0:
+                break
+            if parts[i.variant_id] < i.weight:
+                parts[i.variant_id] += 1
+                remainder -= 1
     return parts
 
 
@@ -90,6 +99,9 @@ def evaluate(
         raise ValueError("now must be timezone-aware")
     if not items:
         raise ValueError("items must not be empty")
+    for bound in (rule.starts_at, rule.ends_at):
+        if bound is not None and bound.tzinfo is None:
+            raise ValueError("rule dates must be timezone-aware")
     if not rule.active:
         return _invalid("inactive")
     if rule.starts_at is not None and now < rule.starts_at:
@@ -109,5 +121,6 @@ def evaluate(
             return _invalid("login_required")
         if uses_by_customer >= rule.max_uses_per_customer:
             return _invalid("customer_limit_reached")
-    discount = subtotal * rule.value // 100 if rule.kind == "percent" else min(rule.value, subtotal)
+    raw = subtotal * rule.value // 100 if rule.kind == "percent" else rule.value
+    discount = min(raw, subtotal)
     return Evaluation(True, discount, allocate(discount, eligible), None, None)

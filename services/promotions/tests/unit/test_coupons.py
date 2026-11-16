@@ -2,7 +2,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from hypothesis import given
+from hypothesis import example, given
 from hypothesis import strategies as st
 
 from promotions.domain.coupons import (
@@ -182,30 +182,76 @@ def test_allocate_quantity_weight() -> None:
 
 def test_allocate_empty_or_zero() -> None:
     assert allocate(0, [item()]) == {"v1": 0}
-    assert allocate(10, []) == {}
+    assert allocate(0, []) == {}
 
 
-@given(
-    discount=st.integers(min_value=0, max_value=10_000_000),
-    items=st.lists(
+def _items_strategy(max_price: int, max_qty: int):
+    return st.lists(
         st.builds(
             LineItem,
-            variant_id=st.uuids().map(str),
-            unit_price_cents=st.integers(min_value=1, max_value=1_000_000),
-            quantity=st.integers(min_value=1, max_value=20),
+            variant_id=st.text(alphabet="abcdef", min_size=1, max_size=3),
+            unit_price_cents=st.integers(min_value=1, max_value=max_price),
+            quantity=st.integers(min_value=1, max_value=max_qty),
             category_slug=st.just("c"),
             collection_slugs=st.just(frozenset()),
         ),
         min_size=1,
         max_size=50,
         unique_by=lambda i: i.variant_id,
-    ),
-)
-def test_allocate_property(discount: int, items: list[LineItem]) -> None:
-    total = sum(i.unit_price_cents * i.quantity for i in items)
-    discount = min(discount, total)
+    )
+
+
+def _check(items: list[LineItem], discount: int) -> None:
     out = allocate(discount, items)
     assert sum(out.values()) == discount
+    assert out == allocate(discount, list(reversed(items)))
     for i in items:
-        part = out[i.variant_id]
-        assert 0 <= part <= i.unit_price_cents * i.quantity
+        assert 0 <= out[i.variant_id] <= i.unit_price_cents * i.quantity
+
+
+@st.composite
+def _case(draw: st.DrawFn, max_price: int, max_qty: int) -> tuple[list[LineItem], int]:
+    items = draw(_items_strategy(max_price, max_qty))
+    total = sum(i.unit_price_cents * i.quantity for i in items)
+    return items, draw(st.integers(min_value=0, max_value=total))
+
+
+@given(case=_case(1_000_000, 20))
+def test_allocate_property_large(case: tuple[list[LineItem], int]) -> None:
+    _check(*case)
+
+
+@example(case=([item("a", 1), item("b", 1), item("c", 1)], 2))
+@example(case=([item("a", 1000), item("b", 1000), item("c", 1000)], 2999))
+@given(case=_case(5, 3))
+def test_allocate_property_small_ties(case: tuple[list[LineItem], int]) -> None:
+    _check(*case)
+
+
+def test_allocate_never_exceeds_item_weight_regressions() -> None:
+    assert allocate(2, [item("a", 1), item("b", 1), item("c", 1)]) == {"a": 1, "b": 1, "c": 0}
+    out = allocate(2999, [item("a", 1000), item("b", 1000), item("c", 1000)])
+    assert out == {"a": 1000, "b": 1000, "c": 999}
+
+
+def test_allocate_discount_above_total_raises() -> None:
+    with pytest.raises(ValueError):
+        allocate(5, [item("a", 1)])
+
+
+def test_percent_over_100_clamped_to_subtotal() -> None:
+    assert ev(rule(value=150), [item(price=1000)]).discount_cents == 1000
+
+
+def test_naive_rule_dates_rejected() -> None:
+    with pytest.raises(ValueError):
+        ev(rule(starts_at=datetime(2026, 1, 1)))
+    with pytest.raises(ValueError):
+        ev(rule(ends_at=datetime(2027, 1, 1)))
+
+
+def test_normalize_code_boundaries_and_non_ascii() -> None:
+    assert normalize_code("abc") == "ABC"
+    assert normalize_code("a" * 32) == "A" * 32
+    with pytest.raises(ValueError):
+        normalize_code("straße")

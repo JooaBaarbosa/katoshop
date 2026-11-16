@@ -1242,6 +1242,106 @@
         "title": "ImagePatch",
         "type": "object"
       },
+      "InternalVariant": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "available": {
+            "title": "Available",
+            "type": "integer"
+          },
+          "category_slug": {
+            "title": "Category Slug",
+            "type": "string"
+          },
+          "collection_slugs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Collection Slugs",
+            "type": "array"
+          },
+          "color_code": {
+            "title": "Color Code",
+            "type": "string"
+          },
+          "color_name": {
+            "title": "Color Name",
+            "type": "string"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "product_slug": {
+            "title": "Product Slug",
+            "type": "string"
+          },
+          "product_status": {
+            "title": "Product Status",
+            "type": "string"
+          },
+          "size_code": {
+            "title": "Size Code",
+            "type": "string"
+          },
+          "sku": {
+            "title": "Sku",
+            "type": "string"
+          },
+          "unit_price_cents": {
+            "title": "Unit Price Cents",
+            "type": "integer"
+          },
+          "variant_id": {
+            "format": "uuid",
+            "title": "Variant Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "variant_id",
+          "sku",
+          "product_id",
+          "product_slug",
+          "product_status",
+          "name",
+          "color_code",
+          "color_name",
+          "size_code",
+          "unit_price_cents",
+          "available",
+          "active",
+          "image_url",
+          "category_slug",
+          "collection_slugs",
+          "version"
+        ],
+        "title": "InternalVariant",
+        "type": "object"
+      },
       "MovementOut": {
         "properties": {
           "actor_id": {
@@ -3611,6 +3711,49 @@
         "summary": "Credits",
         "tags": [
           "public"
+        ]
+      }
+    },
+    "/v1/internal/variants/{variant_id}": {
+      "get": {
+        "operationId": "get_variant_v1_internal_variants__variant_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "variant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Variant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalVariant"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Variant",
+        "tags": [
+          "internal"
         ]
       }
     },

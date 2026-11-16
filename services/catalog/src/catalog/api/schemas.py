@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import fields
 from datetime import datetime
 from typing import Annotated, Any, ClassVar, Literal, Self
 
@@ -8,6 +9,7 @@ from catalog.adapters.product_queries import (
     ColorRef,
     Credit,
     Facets,
+    InternalVariantRecord,
     ProductCard,
     ProductDetail,
 )
@@ -674,3 +676,28 @@ class CreditList(BaseModel):
                 for c in credits
             ]
         )
+
+
+class InternalVariant(BaseModel):
+    variant_id: uuid.UUID
+    sku: str
+    product_id: uuid.UUID
+    product_slug: str
+    product_status: str
+    name: str
+    color_code: str
+    color_name: str
+    size_code: str
+    unit_price_cents: int
+    available: int
+    active: bool
+    image_url: str | None
+    category_slug: str
+    collection_slugs: list[str]
+    version: int
+
+    @classmethod
+    def from_record(cls, record: InternalVariantRecord, public_base_url: str) -> Self:
+        data = {f.name: getattr(record, f.name) for f in fields(record) if f.name != "image_key"}
+        image_url = media_url(public_base_url, record.image_key) if record.image_key else None
+        return cls(**data, image_url=image_url)

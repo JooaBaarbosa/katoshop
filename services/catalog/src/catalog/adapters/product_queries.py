@@ -547,6 +547,84 @@ async def product_detail(session: AsyncSession, slug: str) -> ProductDetail | No
     )
 
 
+@dataclass(frozen=True)
+class InternalVariantRecord:
+    variant_id: uuid.UUID
+    sku: str
+    product_id: uuid.UUID
+    product_slug: str
+    product_status: str
+    name: str
+    color_code: str
+    color_name: str
+    size_code: str
+    unit_price_cents: int
+    available: int
+    active: bool
+    image_key: str | None
+    category_slug: str
+    collection_slugs: list[str]
+    version: int
+
+
+async def internal_variant(
+    session: AsyncSession, variant_id: uuid.UUID
+) -> InternalVariantRecord | None:
+    """Variante para o snapshot do carrinho: sem filtro de status (quem decide é o cart)."""
+    row = (
+        await session.execute(
+            select(Variant, Product, Category.slug, Color.name)
+            .join(Product, Product.id == Variant.product_id)
+            .join(Category, Category.id == Product.category_id)
+            .join(Color, Color.code == Variant.color_code)
+            .where(Variant.id == variant_id)
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    v, p, category_slug, color_name = row
+    image_key = await session.scalar(
+        select(ProductImage.storage_key)
+        .where(
+            ProductImage.product_id == p.id,
+            (ProductImage.color_code == v.color_code) | ProductImage.color_code.is_(None),
+        )
+        # Imagem da cor antes da genérica; dentro de cada grupo, a primeira por posição.
+        .order_by(
+            ProductImage.color_code.is_(None),
+            ProductImage.position,
+            ProductImage.id,
+        )
+        .limit(1)
+    )
+    collection_slugs = (
+        await session.scalars(
+            select(Collection.slug)
+            .join(CollectionProduct, CollectionProduct.collection_id == Collection.id)
+            .where(CollectionProduct.product_id == p.id)
+            .order_by(Collection.slug)
+        )
+    ).all()
+    return InternalVariantRecord(
+        variant_id=v.id,
+        sku=v.sku,
+        product_id=p.id,
+        product_slug=p.slug,
+        product_status=p.status,
+        name=p.name,
+        color_code=v.color_code,
+        color_name=color_name,
+        size_code=v.size_code,
+        unit_price_cents=effective_price(p.base_price_cents, v.price_cents),
+        available=available(v.stock_on_hand, v.stock_reserved) if v.active else 0,
+        active=v.active,
+        image_key=image_key,
+        category_slug=category_slug,
+        collection_slugs=list(collection_slugs),
+        version=v.version,
+    )
+
+
 _NO_FILTER = ProductFilter(
     category=None,
     collection=None,

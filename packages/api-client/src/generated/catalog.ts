@@ -403,6 +403,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/internal/variants/{variant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Variant */
+        get: operations["get_variant_v1_internal_variants__variant_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/media/{storage_key}": {
         parameters: {
             query?: never;
@@ -901,6 +918,47 @@ export interface components {
             license?: string | null;
             /** Position */
             position?: number | null;
+        };
+        /** InternalVariant */
+        InternalVariant: {
+            /** Active */
+            active: boolean;
+            /** Available */
+            available: number;
+            /** Category Slug */
+            category_slug: string;
+            /** Collection Slugs */
+            collection_slugs: string[];
+            /** Color Code */
+            color_code: string;
+            /** Color Name */
+            color_name: string;
+            /** Image Url */
+            image_url: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Product Id
+             * Format: uuid
+             */
+            product_id: string;
+            /** Product Slug */
+            product_slug: string;
+            /** Product Status */
+            product_status: string;
+            /** Size Code */
+            size_code: string;
+            /** Sku */
+            sku: string;
+            /** Unit Price Cents */
+            unit_price_cents: number;
+            /**
+             * Variant Id
+             * Format: uuid
+             */
+            variant_id: string;
+            /** Version */
+            version: number;
         };
         /** MovementOut */
         MovementOut: {
@@ -2157,6 +2215,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreditList"];
+                };
+            };
+        };
+    };
+    get_variant_v1_internal_variants__variant_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalVariant"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

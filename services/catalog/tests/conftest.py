@@ -43,7 +43,7 @@ class TestSigner:
     def token(
         self,
         *,
-        sub: uuid.UUID,
+        sub: uuid.UUID | str,
         aud: str,
         kind: str,
         roles: list[str],
@@ -115,6 +115,11 @@ def admin_token(signer: TestSigner, admin_user_id: uuid.UUID) -> str:
 @pytest.fixture
 def customer_token(signer: TestSigner) -> str:
     return signer.token(sub=uuid.uuid7(), aud="storefront", kind="customer", roles=[])
+
+
+@pytest.fixture
+def service_token(signer: TestSigner) -> str:
+    return signer.token(sub="cart", aud="service", kind="service", roles=[])
 
 
 @pytest.fixture

@@ -6,9 +6,9 @@ import uuid
 import httpx
 import jwt
 import pytest
+from _helpers import FakeFetch, Signer
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
-from test_auth import FakeFetch, Signer
 
 from ks_platform.auth import JwksKeyProvider, ServicePrincipal, TokenVerifier, require_service
 from ks_platform.errors import ProblemError, install_problem_handlers

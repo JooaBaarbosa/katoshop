@@ -1,8 +1,11 @@
+import base64
+import json
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
+from fastapi import FastAPI
 
 type Json = dict[str, Any]
 
@@ -221,3 +224,68 @@ async def test_requires_admin_permission(
     staff = await client.get(BASE, headers={"Authorization": f"Bearer {staff_without_roles_token}"})
     assert staff.status_code == 403
     assert staff.json()["code"] == "auth.insufficient_permission"
+
+
+async def test_patch_merge_rejects_period_inversion(
+    admin_client: httpx.AsyncClient, new_code: Callable[[str], str]
+) -> None:
+    created = await create(
+        admin_client,
+        new_code("PER"),
+        starts_at="2026-12-01T00:00:00Z",
+        ends_at="2026-12-31T00:00:00Z",
+    )
+    response = await admin_client.patch(
+        f"{BASE}/{created['id']}", json={"version": 1, "ends_at": "2026-11-30T00:00:00Z"}
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "request.validation"
+    assert "body.ends_at" in response.json()["errors"]
+
+
+async def test_patch_unknown_key_422(
+    admin_client: httpx.AsyncClient, new_code: Callable[[str], str]
+) -> None:
+    created = await create(admin_client, new_code("UNK"))
+    response = await admin_client.patch(f"{BASE}/{created['id']}", json={"version": 1, "valeu": 1})
+    assert response.status_code == 422
+    assert response.json()["code"] == "request.validation"
+
+
+async def test_patch_schema_hides_code_and_forbids_extras(app: FastAPI) -> None:
+    schema = app.openapi()["components"]["schemas"]["CouponPatch"]
+    assert "code" not in schema["properties"]
+    assert schema.get("additionalProperties") is False
+
+
+async def test_extreme_offset_datetimes_are_normalized_or_422(
+    admin_client: httpx.AsyncClient, new_code: Callable[[str], str]
+) -> None:
+    for field, raw in [
+        ("starts_at", "0001-01-01T00:00:00+05:00"),
+        ("ends_at", "9999-12-31T23:00:00-05:00"),
+    ]:
+        response = await admin_client.post(
+            BASE, json={"code": new_code("EXT"), "kind": "fixed", "value": 5, field: raw}
+        )
+        assert response.status_code == 422, field
+        assert response.json()["code"] == "request.validation"
+    created = await create(admin_client, new_code("OFF"))
+    patched = await admin_client.patch(
+        f"{BASE}/{created['id']}", json={"version": 1, "ends_at": "9999-12-31T23:00:00-05:00"}
+    )
+    assert patched.status_code == 422
+    assert patched.json()["code"] == "request.validation"
+    ok = await admin_client.patch(
+        f"{BASE}/{created['id']}", json={"version": 1, "ends_at": "2030-01-01T00:00:00-03:00"}
+    )
+    assert ok.status_code == 200
+    assert ok.json()["ends_at"].startswith("2030-01-01T03:00:00")
+
+
+async def test_cursor_with_extreme_offset_is_invalid_422(admin_client: httpx.AsyncClient) -> None:
+    payload = {"c": "0001-01-01T00:00:00+05:00", "i": str(uuid.uuid7())}
+    token = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
+    response = await admin_client.get(BASE, params={"cursor": token})
+    assert response.status_code == 422
+    assert response.json()["code"] == "promotions.pagination.invalid_cursor"

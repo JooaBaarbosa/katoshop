@@ -170,9 +170,21 @@ async def test_evaluate_rejects_bad_items(client: httpx.AsyncClient, service_tok
     empty = await _evaluate(client, service_token, "ABC", [])
     assert empty.status_code == 422
     assert empty.json()["code"] == "request.validation"
+    assert "body.items" in empty.json()["errors"]
     too_many = await _evaluate(
         client, service_token, "ABC", [item(str(uuid.uuid4()), 100) for _ in range(51)]
     )
     assert too_many.status_code == 422
     zero_qty = await _evaluate(client, service_token, "ABC", [item(VARIANT_A, 100, 0)])
     assert zero_qty.status_code == 422
+
+
+async def test_evaluate_rejects_duplicate_variant_ids(
+    client: httpx.AsyncClient, service_token: str
+) -> None:
+    response = await _evaluate(
+        client, service_token, "ABC", [item(VARIANT_A, 100), item(VARIANT_A, 200)]
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "request.validation"
+    assert "body.items" in response.json()["errors"]

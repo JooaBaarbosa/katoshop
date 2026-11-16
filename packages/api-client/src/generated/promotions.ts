@@ -226,7 +226,7 @@ export interface components {
          * CouponPatch
          * @description Os campos de CouponIn menos `code`, todos opcionais, mais `version`.
          *
-         *     `code` entra como campo extra só para a rota responder 422 `code_immutable`.
+         *     `code` existe só para a rota responder 422 `code_immutable`; fica fora do schema.
          */
         CouponPatch: {
             /** Active */
@@ -253,8 +253,6 @@ export interface components {
             value?: number | null;
             /** Version */
             version: number;
-        } & {
-            [key: string]: unknown;
         };
         /** EvaluateIn */
         EvaluateIn: {

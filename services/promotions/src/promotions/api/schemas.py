@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Literal, Self
 
 from pydantic import (
@@ -12,6 +12,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 
 from promotions.application.evaluate_service import EvaluationResult
 from promotions.application.ports import CouponRecord
@@ -27,6 +28,16 @@ def _dedupe(values: list[str]) -> list[str]:
 
 Slugs = Annotated[list[Slug], Field(max_length=50), AfterValidator(_dedupe)]
 PositiveInt = Annotated[int, Field(ge=1, le=2_000_000_000)]
+
+
+def _to_utc(value: datetime) -> datetime:
+    try:
+        return value.astimezone(UTC)
+    except OverflowError as exc:
+        raise ValueError("Data fora do intervalo suportado") from exc
+
+
+UtcDatetime = Annotated[AwareDatetime, AfterValidator(_to_utc)]
 
 
 def _code(value: str) -> str:
@@ -49,8 +60,8 @@ class CouponIn(_In):
     kind: Literal["percent", "fixed"]
     value: PositiveInt
     min_order_cents: PositiveInt | None = None
-    starts_at: AwareDatetime | None = None
-    ends_at: AwareDatetime | None = None
+    starts_at: UtcDatetime | None = None
+    ends_at: UtcDatetime | None = None
     category_slugs: Slugs = Field(default_factory=list)
     collection_slugs: Slugs = Field(default_factory=list)
     max_uses_total: PositiveInt | None = None
@@ -68,18 +79,20 @@ class CouponIn(_In):
 class CouponPatch(BaseModel):
     """Os campos de CouponIn menos `code`, todos opcionais, mais `version`.
 
-    `code` entra como campo extra só para a rota responder 422 `code_immutable`.
+    `code` existe só para a rota responder 422 `code_immutable`; fica fora do schema.
     """
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
+
+    code: SkipJsonSchema[str | None] = None
 
     version: int = Field(ge=1)
     description: str | None = Field(default=None, max_length=500)
     kind: Literal["percent", "fixed"] | None = None
     value: PositiveInt | None = None
     min_order_cents: PositiveInt | None = None
-    starts_at: AwareDatetime | None = None
-    ends_at: AwareDatetime | None = None
+    starts_at: UtcDatetime | None = None
+    ends_at: UtcDatetime | None = None
     category_slugs: Slugs | None = None
     collection_slugs: Slugs | None = None
     max_uses_total: PositiveInt | None = None
@@ -98,12 +111,12 @@ class CouponPatch(BaseModel):
         return {
             name: getattr(self, name)
             for name in self.model_fields_set
-            if name in type(self).model_fields and name != "version"
+            if name not in {"version", "code"}
         }
 
     @property
     def sends_code(self) -> bool:
-        return "code" in (self.model_extra or {})
+        return "code" in self.model_fields_set
 
 
 class CouponOut(BaseModel):

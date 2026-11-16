@@ -113,6 +113,11 @@ class SqlCouponRepository:
         )
         return await self._s.scalar(stmt.execution_options(**_NO_SYNC)) is not None
 
+    async def lock(self, coupon_id: uuid.UUID) -> bool:
+        """Trava a linha (FOR UPDATE) até o fim da transação; False se não existir."""
+        stmt = select(Coupon.id).where(Coupon.id == coupon_id).with_for_update()
+        return await self._s.scalar(stmt) is not None
+
     async def delete(self, coupon_id: uuid.UUID) -> None:
         await self._s.execute(
             delete(Coupon).where(Coupon.id == coupon_id).execution_options(**_NO_SYNC)

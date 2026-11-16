@@ -297,8 +297,8 @@
         "type": "object"
       },
       "CouponPatch": {
-        "additionalProperties": true,
-        "description": "Os campos de CouponIn menos `code`, todos opcionais, mais `version`.\n\n`code` entra como campo extra só para a rota responder 422 `code_immutable`.",
+        "additionalProperties": false,
+        "description": "Os campos de CouponIn menos `code`, todos opcionais, mais `version`.\n\n`code` existe só para a rota responder 422 `code_immutable`; fica fora do schema.",
         "properties": {
           "active": {
             "anyOf": [

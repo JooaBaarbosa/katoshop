@@ -1,7 +1,7 @@
 """Casos de uso do admin de cupons. Cada método roda numa transação própria."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +23,28 @@ COUPON_CODE_IMMUTABLE = "promotions.coupon.code_immutable"
 REQUEST_VALIDATION = "request.validation"
 
 
+UNIQUE_VIOLATION = "23505"
+# ON DELETE RESTRICT levanta 23001 (restrict_violation); 23503 vale para FK sem RESTRICT.
+FK_VIOLATIONS = frozenset({"23001", "23503"})
+CODE_INDEX = "ix_coupons_code"
+REDEMPTIONS_FK = "coupon_redemptions_coupon_id_fkey"
+
+
+def violates_constraint(
+    exc: IntegrityError, sqlstates: frozenset[str] | str, constraint: str
+) -> bool:
+    """SQLSTATE + nome da constraint. O asyncpg só preenche `constraint_name` em alguns erros
+    (o RESTRICT não); nesses casos o nome vem entre aspas na mensagem do Postgres."""
+    orig = exc.orig
+    allowed = frozenset({sqlstates}) if isinstance(sqlstates, str) else sqlstates
+    if getattr(orig, "sqlstate", None) not in allowed:
+        return False
+    name = getattr(orig, "constraint_name", None) or getattr(
+        getattr(orig, "__cause__", None), "constraint_name", None
+    )
+    return name == constraint if name else f'"{constraint}"' in str(orig)
+
+
 class CouponError(Exception):
     def __init__(self, code: str, errors: dict[str, list[str]] | None = None) -> None:
         super().__init__(code)
@@ -39,10 +61,11 @@ def decode_coupon_cursor(token: str) -> CouponCursor:
     try:
         created_at = datetime.fromisoformat(payload["c"])
         row_id = uuid.UUID(payload["i"])
-    except ValueError as exc:
+        if created_at.tzinfo is None:
+            raise ValueError("naive")
+        created_at = created_at.astimezone(UTC)
+    except (ValueError, OverflowError) as exc:
         raise invalid_cursor() from exc
-    if created_at.tzinfo is None:
-        raise invalid_cursor()
     return CouponCursor(created_at, row_id)
 
 
@@ -72,7 +95,7 @@ class AdminCouponService:
                 return await uow.coupons.add(fields)
         except IntegrityError as exc:
             # Corrida entre duas criações do mesmo código: o índice único decide.
-            if "ix_coupons_code" in str(exc.orig):
+            if violates_constraint(exc, UNIQUE_VIOLATION, CODE_INDEX):
                 raise CouponError(COUPON_CODE_TAKEN) from exc
             raise
 
@@ -102,11 +125,19 @@ class AdminCouponService:
             return await self._require(uow.coupons.get(coupon_id))
 
     async def delete(self, coupon_id: uuid.UUID) -> None:
-        async with self._uow() as uow:
-            await self._require(uow.coupons.get(coupon_id))
-            if await uow.coupons.count_uses(coupon_id) > 0:
-                raise CouponError(COUPON_HAS_REDEMPTIONS)
-            await uow.coupons.delete(coupon_id)
+        try:
+            async with self._uow() as uow:
+                # A trava na linha do cupom serializa com quem for resgatá-lo agora.
+                if not await uow.coupons.lock(coupon_id):
+                    raise CouponError(COUPON_NOT_FOUND)
+                if await uow.coupons.count_uses(coupon_id) > 0:
+                    raise CouponError(COUPON_HAS_REDEMPTIONS)
+                await uow.coupons.delete(coupon_id)
+        except IntegrityError as exc:
+            # Resgate gravado por uma transação que não passou pela trava: o FK RESTRICT decide.
+            if violates_constraint(exc, FK_VIOLATIONS, REDEMPTIONS_FK):
+                raise CouponError(COUPON_HAS_REDEMPTIONS) from exc
+            raise
 
     @staticmethod
     async def _require(pending: Any) -> CouponRecord:

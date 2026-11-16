@@ -17,6 +17,7 @@ dependencies = [
 dev = [
     "katoshop-platform[testing]",
     "pytest-cov==7.1.0",
+    "hypothesis==6.170.15",
 ]
 
 [tool.uv.sources]

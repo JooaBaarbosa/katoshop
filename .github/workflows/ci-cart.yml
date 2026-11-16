@@ -1,0 +1,33 @@
+name: ci-cart
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - services/cart/**
+      - libs/py/platform/**
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/ci-cart.yml
+  pull_request:
+    paths:
+      - services/cart/**
+      - libs/py/platform/**
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/ci-cart.yml
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: 0.13.7
+          python-version: "3.15.2"
+      - run: uv sync --all-packages --all-groups --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright services/cart
+      - run: uv run pytest services/cart -q

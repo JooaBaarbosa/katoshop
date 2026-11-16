@@ -8,7 +8,7 @@
     "./session": "./src/session.ts"
   },
   "scripts": {
-    "gen": "openapi-typescript openapi/identity.json -o src/generated/identity.ts && openapi-typescript openapi/catalog.json -o src/generated/catalog.ts",
+    "gen": "openapi-typescript openapi/identity.json -o src/generated/identity.ts && openapi-typescript openapi/catalog.json -o src/generated/catalog.ts && openapi-typescript openapi/promotions.json -o src/generated/promotions.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

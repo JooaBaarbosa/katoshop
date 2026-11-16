@@ -78,7 +78,10 @@ async def test_valid_coupon_and_unique_code(migrated_url: str) -> None:
             await conn.execute(sql, {"code": "BEMVINDO10", "kind": "percent", "value": 90})
             row = (
                 await conn.execute(
-                    text("SELECT category_slugs, collection_slugs, active, version FROM coupons")
+                    text(
+                        "SELECT category_slugs, collection_slugs, active, version "
+                        "FROM coupons WHERE code = 'BEMVINDO10'"
+                    )
                 )
             ).one()
             with pytest.raises(IntegrityError):

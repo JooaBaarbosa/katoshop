@@ -20,6 +20,8 @@ from catalog.main import create_app as create_catalog_app
 from catalog.settings import CatalogSettings
 from identity.main import create_app as create_identity_app
 from identity.settings import IdentitySettings
+from promotions.main import create_app as create_promotions_app
+from promotions.settings import PromotionsSettings
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = REPO_ROOT / "packages" / "api-client" / "openapi"
@@ -58,6 +60,16 @@ def build_catalog(workdir: Path) -> FastAPI:
     )
 
 
+def build_promotions(_workdir: Path) -> FastAPI:
+    return create_promotions_app(
+        PromotionsSettings(
+            _env_file=None,  # pyright: ignore[reportCallIssue]
+            database_url=DUMMY_DATABASE_URL,
+            jwks_url=DUMMY_JWKS_URL,
+        )
+    )
+
+
 def render(schema: dict[str, Any]) -> str:
     return json.dumps(schema, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
 
@@ -66,6 +78,7 @@ def main(output_dir: Path = OUTPUT_DIR) -> int:
     builders: dict[str, Callable[[Path], FastAPI]] = {
         "identity": build_identity,
         "catalog": build_catalog,
+        "promotions": build_promotions,
     }
     output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:

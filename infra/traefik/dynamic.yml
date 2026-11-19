@@ -1,6 +1,10 @@
 # Rotas do gateway api.katoshop.localhost (os prefixos /identity, /catalog, /cart e
 # /promotions são removidos antes de chegar aos serviços), da loja em katoshop.localhost e do
 # painel em admin.katoshop.localhost.
+#
+# PathPrefix é prefixo de texto: PathPrefix(`/catalog`) casaria com `/catalogv1/...`, e o
+# stripPrefix devolveria `/v1/...` ao serviço, escapando dos routers de bloqueio e de rate limit.
+# Por isso toda regra com prefixo usa PathRegexp ancorado em fronteira de segmento: `(/|$)`.
 http:
   routers:
     # Rotas só de serviço para serviço (rede interna do compose): o router genérico de cada
@@ -8,9 +12,9 @@ http:
     # 404 sem chegar ao serviço. O cart não tem rota interna; o promotions só publica o admin.
     internal-block:
       rule: >-
-        Host(`api.katoshop.localhost`) && (PathPrefix(`/catalog/v1/internal`)
-        || PathPrefix(`/identity/v1/auth/service-token`)
-        || PathPrefix(`/promotions/v1/promotions`))
+        Host(`api.katoshop.localhost`) && (PathRegexp(`^/catalog/v1/internal(/|$)`)
+        || PathRegexp(`^/identity/v1/auth/service-token(/|$)`)
+        || PathRegexp(`^/promotions/v1/promotions(/|$)`))
       entryPoints: [web]
       middlewares: [internal-not-found]
       service: noop@internal
@@ -20,29 +24,29 @@ http:
     # saem pelo mesmo IP e esgotariam o balde renovando sessões no SSR.
     identity-auth:
       rule: >-
-        Host(`api.katoshop.localhost`) && (Path(`/identity/v1/auth/login`)
-        || Path(`/identity/v1/auth/staff/login`) || Path(`/identity/v1/auth/register`))
+        Host(`api.katoshop.localhost`)
+        && PathRegexp(`^/identity/v1/auth/(login|staff/login|register)/?$`)
       entryPoints: [web]
       middlewares: [auth-ratelimit, identity-strip]
       service: identity
       priority: 200
 
     identity:
-      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/identity`)"
+      rule: "Host(`api.katoshop.localhost`) && PathRegexp(`^/identity(/|$)`)"
       entryPoints: [web]
       middlewares: [identity-strip]
       service: identity
       priority: 100
 
     catalog:
-      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/catalog`)"
+      rule: "Host(`api.katoshop.localhost`) && PathRegexp(`^/catalog(/|$)`)"
       entryPoints: [web]
       middlewares: [catalog-body-limit, catalog-strip]
       service: catalog
       priority: 100
 
     cart:
-      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/cart`)"
+      rule: "Host(`api.katoshop.localhost`) && PathRegexp(`^/cart(/|$)`)"
       entryPoints: [web]
       middlewares: [cart-body-limit, cart-strip]
       service: cart
@@ -50,9 +54,9 @@ http:
 
     # Só o admin do promotions é público; o evaluate fica na rede interna (e no internal-block).
     promotions-admin:
-      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/promotions/v1/admin`)"
+      rule: "Host(`api.katoshop.localhost`) && PathRegexp(`^/promotions/v1/admin(/|$)`)"
       entryPoints: [web]
-      middlewares: [promotions-strip]
+      middlewares: [promotions-body-limit, promotions-strip]
       service: promotions
       priority: 100
 
@@ -157,6 +161,11 @@ http:
 
     # O carrinho só recebe JSON pequeno: 64 KiB (acima disso o gateway responde 413).
     cart-body-limit:
+      buffering:
+        maxRequestBodyBytes: 65536
+
+    # O admin do promotions só recebe JSON de cupom (sem upload): mesmo teto do cart.
+    promotions-body-limit:
       buffering:
         maxRequestBodyBytes: 65536
 

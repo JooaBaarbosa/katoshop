@@ -10,7 +10,7 @@ from redis.exceptions import WatchError
 
 from cart.adapters import redis_repo
 from cart.adapters.redis_repo import RedisCartRepository, item_from_json, item_to_json
-from cart.domain.cart import Cart, CartError, CartItem, Notice
+from cart.domain.cart import Cart, CartError, CartItem, Notice, add_item
 
 GUEST_TTL = 3600
 
@@ -147,6 +147,79 @@ async def test_concurrent_mutations_no_lost_update(repo: RedisCartRepository) ->
     assert stored.version == cart.version + 10
 
 
+async def test_concurrent_same_sku_increments_no_lost_update(repo: RedisCartRepository) -> None:
+    cart = await repo.new_guest()
+    snapshot = make_item(available=100)
+
+    def add_one(c: Cart) -> None:
+        add_item(c, snapshot, 1, max_lines=50, max_qty=50)
+
+    await asyncio.gather(*(repo.mutate(cart.cart_id, add_one) for _ in range(10)))
+
+    stored = await repo.get(cart.cart_id)
+    assert stored is not None
+    assert stored.items[snapshot.variant_id].quantity == 10
+
+
+async def test_noop_mutate_leaves_version_and_ttl(repo: RedisCartRepository, redis: Redis) -> None:
+    cart = await repo.new_guest()
+    item = make_item()
+    await repo.mutate(cart.cart_id, put(item))
+    await repo.mutate(cart.cart_id, lambda c: setattr(c, "coupon_code", "BEMVINDO10"))
+    header, items = f"cart:{cart.cart_id}", f"cart:{cart.cart_id}:items"
+    await redis.expire(header, 100)
+    await redis.expire(items, 100)
+    before = await repo.get(cart.cart_id)
+    assert before is not None
+
+    def same(c: Cart) -> str:
+        c.items[item.variant_id] = replace(item)
+        c.coupon_code = "BEMVINDO10"
+        return "nada"
+
+    assert await repo.mutate(cart.cart_id, same) == "nada"
+
+    assert await repo.get(cart.cart_id) == before
+    assert 0 < await redis.ttl(header) <= 100
+    assert 0 < await redis.ttl(items) <= 100
+
+
+async def test_renew_ttl_false_applies_change_and_keeps_ttl(
+    repo: RedisCartRepository, redis: Redis
+) -> None:
+    cart = await repo.new_guest()
+    first = make_item()
+    await repo.mutate(cart.cart_id, put(first))
+    header, items = f"cart:{cart.cart_id}", f"cart:{cart.cart_id}:items"
+    await redis.expire(header, 100)
+    await redis.expire(items, 100)
+
+    def reprice(c: Cart) -> None:
+        c.items[first.variant_id].unit_price_cents = 3990
+
+    await repo.mutate(cart.cart_id, reprice, renew_ttl=False)
+
+    stored = await repo.get(cart.cart_id)
+    assert stored is not None
+    assert stored.version == 2
+    assert stored.items[first.variant_id].unit_price_cents == 3990
+    assert 0 < await redis.ttl(header) <= 100
+    assert 0 < await redis.ttl(items) <= 100
+
+
+async def test_renew_ttl_false_new_items_key_gets_header_ttl(
+    repo: RedisCartRepository, redis: Redis
+) -> None:
+    cart = await repo.new_guest()
+    header, items = f"cart:{cart.cart_id}", f"cart:{cart.cart_id}:items"
+    await redis.expire(header, 100)
+
+    await repo.mutate(cart.cart_id, put(make_item()), renew_ttl=False)
+
+    assert 0 < await redis.ttl(header) <= 100
+    assert 0 < await redis.ttl(items) <= 100
+
+
 async def test_mutate_missing_cart_is_404(repo: RedisCartRepository, redis: Redis) -> None:
     missing = str(uuid.uuid4())
 
@@ -188,6 +261,7 @@ async def test_retries_exhausted_is_409(
     def fn(c: Cart) -> None:
         nonlocal calls
         calls += 1
+        c.coupon_code = "BEMVINDO10"  # mudança real: no-op não chega ao EXEC
 
     async def always_conflict(*_args: object, **_kwargs: object) -> None:
         raise WatchError("conflito simulado")
@@ -203,7 +277,7 @@ async def test_retries_exhausted_is_409(
 
     assert exc.value.code == "cart.cart.concurrent_update"
     assert exc.value.extra == {"status": 409}
-    assert calls == 5
+    assert calls == 6
 
 
 async def test_delete_clears_cart_and_index(repo: RedisCartRepository, redis: Redis) -> None:

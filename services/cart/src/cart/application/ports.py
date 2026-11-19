@@ -9,7 +9,9 @@ class CartRepository(Protocol):
 
     `mutate` pode chamar `fn` mais de uma vez (retentativa após conflito), então `fn` deve só
     alterar o `Cart` recebido, sem efeitos colaterais. Se `fn` levantar `CartError`, nada é
-    gravado e o erro sobe.
+    gravado e o erro sobe. Só itens e `coupon_code` são gravados (mudanças em `owner` e
+    `version` são ignoradas); se nada mudou, nada é escrito. `renew_ttl=False` grava a mudança
+    sem renovar o TTL do visitante (consumidor de eventos).
     """
 
     async def get(self, cart_id: str) -> Cart | None: ...
@@ -18,7 +20,9 @@ class CartRepository(Protocol):
 
     async def new_guest(self) -> Cart: ...
 
-    async def mutate[T](self, cart_id: str, fn: Callable[[Cart], T]) -> T: ...
+    async def mutate[T](
+        self, cart_id: str, fn: Callable[[Cart], T], *, renew_ttl: bool = True
+    ) -> T: ...
 
     async def delete(self, cart_id: str) -> None: ...
 

@@ -33,7 +33,7 @@ from redis.typing import EncodableT, FieldT
 
 from cart.domain.cart import Cart, CartError, CartItem, Notice
 
-MAX_ATTEMPTS = 5
+MAX_ATTEMPTS = 6  # 1 tentativa + 5 retentativas (Review Focus 1)
 PROCESSED_TTL_S = 7 * 24 * 3600
 DISCOUNT_TTL_S = 30
 _BACKOFF_BASE_S = 0.025
@@ -229,10 +229,16 @@ class RedisCartRepository:
             # Apagado entre a criação e a leitura: tenta de novo.
         raise CartError("cart.cart.concurrent_update", status=409)
 
-    async def mutate[T](self, cart_id: str, fn: Callable[[Cart], T]) -> T:
+    async def mutate[T](
+        self, cart_id: str, fn: Callable[[Cart], T], *, renew_ttl: bool = True
+    ) -> T:
         """Lê, aplica `fn` e grava só o que mudou, numa transação MULTI.
 
         `fn` pode rodar mais de uma vez (retentativa), então não deve ter efeitos colaterais.
+        Só itens e `coupon_code` são gravados: mudanças de `fn` em `cart.owner` ou
+        `cart.version` são ignoradas. Se nada mudou, nada é escrito (versão e TTL ficam como
+        estão). `renew_ttl=False` (consumidor de eventos) grava a mudança mas mantém o TTL
+        restante do visitante: só o uso pelo cliente renova o prazo (spec §4.1).
         """
         header_key, items_key = _cart_key(cart_id), _items_key(cart_id)
 
@@ -241,7 +247,7 @@ class RedisCartRepository:
             if not header:
                 raise CartError("cart.cart.not_found", status=404)
             cart = _build_cart(cart_id, header, await pipe.hgetall(items_key))
-            version, owner = cart.version, cart.owner
+            version, owner, coupon = cart.version, cart.owner, cart.coupon_code
             before = {vid: item_to_json(item) for vid, item in cart.items.items()}
             result = fn(cart)
             after = {vid: item_to_json(item) for vid, item in cart.items.items()}
@@ -250,6 +256,13 @@ class RedisCartRepository:
             }
             removed = before.keys() - after.keys()
             added = after.keys() - before.keys()
+            if not changed and not removed and cart.coupon_code == coupon:
+                await pipe.unwatch()
+                return result
+            guest = owner.startswith("guest:")
+            # Sem renovar: as duas chaves seguem o prazo restante do cabeçalho (a de itens pode
+            # nascer agora, sem TTL).
+            remaining_ms = await pipe.pttl(header_key) if guest and not renew_ttl else None
 
             pipe.multi()
             if changed:
@@ -265,9 +278,12 @@ class RedisCartRepository:
                 pipe.sadd(_variant_key(vid), cart_id)
             for vid in removed:
                 pipe.srem(_variant_key(vid), cart_id)
-            if owner.startswith("guest:"):
+            if guest and renew_ttl:
                 pipe.expire(header_key, self._guest_ttl_s)
                 pipe.expire(items_key, self._guest_ttl_s)
+            elif remaining_ms is not None and remaining_ms > 0:
+                pipe.pexpire(header_key, remaining_ms)
+                pipe.pexpire(items_key, remaining_ms)
             await pipe.execute()
             return result
 

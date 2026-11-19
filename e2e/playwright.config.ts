@@ -8,6 +8,8 @@ const CI = Boolean(process.env.CI);
  */
 export default defineConfig({
   testDir: "./tests",
+  // aquece carrinho, token de serviço e cupom numa pilha recém-subida (ver global-setup.ts)
+  globalSetup: "./global-setup.ts",
   fullyParallel: false,
   workers: 1,
   forbidOnly: CI,

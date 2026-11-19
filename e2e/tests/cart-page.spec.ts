@@ -4,6 +4,7 @@ import {
   addToCart,
   brl,
   cartLine,
+  expectQuantity,
   guestCart,
   openApi,
   staffToken,
@@ -23,15 +24,15 @@ async function exerciseCart(page: Page, js: boolean): Promise<void> {
   await addToCart(page, SHIRT.slug, "BRC", "M", js);
   await page.goto("/carrinho");
   const line = cartLine(page, SHIRT.name);
-  const quantity = line.getByLabel("Quantidade", { exact: true });
-  await expect(quantity).toHaveText("1");
+  await expectQuantity(line, 1);
 
+  // depois de cada clique, o erro da linha vazio antes da quantidade (falha mostra o motivo)
   await submit(page, line.getByRole("button", { name: "Aumentar quantidade" }), js);
-  await expect(quantity).toHaveText("2");
+  await expectQuantity(line, 2);
   await submit(page, line.getByRole("button", { name: "Diminuir quantidade" }), js);
-  await expect(quantity).toHaveText("1");
+  await expectQuantity(line, 1);
   await submit(page, line.getByRole("button", { name: "Aumentar quantidade" }), js);
-  await expect(quantity).toHaveText("2");
+  await expectQuantity(line, 2);
   await expect(summaryValue(page, "Subtotal")).toHaveText(brl(2 * SHIRT.cents));
 
   // cupom inexistente: a mensagem em pt-BR e o código digitado volta no campo
@@ -86,7 +87,7 @@ test("estoque reduzido com a página aberta: o + mostra o aviso depois do refres
       const quantity = line.getByLabel("Quantidade", { exact: true });
       const plus = line.getByRole("button", { name: "Aumentar quantidade" });
       await plus.click();
-      await expect(quantity).toHaveText("2");
+      await expectQuantity(line, 2);
 
       // estoque absoluto de 2: a linha não é reduzida, mas o 3 passa do estoque
       await setStock(api, token, bermuda, 2, "Teste e2e: estoque desatualizado no carrinho");

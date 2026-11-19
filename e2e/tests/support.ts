@@ -81,6 +81,20 @@ export function cartLine(page: Page, name: string): Locator {
     });
 }
 
+/**
+ * Espera a quantidade da linha conferindo antes o erro da linha (o `p[role=status]`; o
+ * `<output>` da quantidade também tem papel status). Se a ação falhar, o timeout mostra a
+ * mensagem de erro da tela, não só a quantidade antiga.
+ */
+export async function expectQuantity(line: Locator, quantity: number): Promise<void> {
+  const error = line.locator('p[role="status"]');
+  const output = line.getByLabel("Quantidade", { exact: true });
+  await expect(async () => {
+    expect(await error.textContent(), "erro da linha do carrinho").toBe("");
+    expect(await output.textContent(), "quantidade da linha").toBe(String(quantity));
+  }).toPass({ timeout: 10_000 });
+}
+
 /** Valor de uma linha do resumo (Subtotal, Desconto ou Total). */
 export function summaryValue(page: Page, label: string): Locator {
   return page

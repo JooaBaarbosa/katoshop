@@ -538,7 +538,10 @@ def storefront_settings(hero_image_key: str) -> dict[str, Any]:
         "secondary_cta": {"label": "Todas as peças", "href": "/busca"},
         "featured_collection_slugs": [c.slug for c in COLLECTIONS],
         "policies": {
-            "shipping_text": "Frete calculado pelo CEP no carrinho. Pedidos demo não são enviados.",
+            "shipping_text": (
+                "Frete calculado no checkout, que chega na próxima versão. "
+                "Pedidos demo não são enviados."
+            ),
             "returns_text": "Troca ou devolução em até 7 dias após o recebimento.",
             "pix_discount_percent": 5,
             "max_installments": 3,

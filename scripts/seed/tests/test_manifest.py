@@ -132,7 +132,12 @@ def test_storefront_settings() -> None:
     assert policies["pix_discount_percent"] == 5
     assert policies["max_installments"] == 3
     assert policies["demo_notice"] == "Loja demonstrativa, nenhuma compra é real"
-    assert policies["shipping_text"] and policies["returns_text"]
+    # S14: o carrinho não calcula frete; o texto não pode prometer isso.
+    assert policies["shipping_text"] == (
+        "Frete calculado no checkout, que chega na próxima versão. Pedidos demo não são enviados."
+    )
+    assert "CEP" not in policies["shipping_text"]
+    assert policies["returns_text"]
     assert set(s["featured_collection_slugs"]) <= {c.slug for c in data.COLLECTIONS}
 
 

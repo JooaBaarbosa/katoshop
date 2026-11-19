@@ -25,7 +25,10 @@ O token é um JWT EdDSA assinado com a mesma chave dos outros tokens, com `aud="
 ### Uso e validação
 
 - O cart guarda o token em memória e renova 30 s antes de expirar (`ks_platform.service_tokens`). Um 401 de uma rota
-  interna força a renovação e uma nova tentativa.
+  interna força a renovação e uma nova tentativa, exceto na avaliação do cupom que só monta a resposta do carrinho: ali
+  o orçamento é de 800 ms e o 401 só descarta o token, sem nova tentativa (ruling S12). Uma falha na emissão do token
+  é logada com o `client_id`, o status HTTP e o `code` do identity (nunca o segredo), o que torna diagnosticável um
+  `CART_CLIENT_SECRET` diferente do `IDENTITY_SERVICE_CLIENTS`.
 - O catalog (rota interna de variante) e o promotions (evaluate) exigem a audiência `service`. Na `ks_platform`, o
   chamador vira um `ServicePrincipal(client_id)`, separado do `Principal` de cliente e funcionário (ruling S1): o `sub`
   de usuário continua sendo UUID e um token de serviço nunca passa por uma checagem de permissão de usuário.
@@ -72,6 +75,9 @@ e o mesmo valor vai em `IDENTITY_SERVICE_CLIENTS` e na variável do serviço cli
 - Trocar um segredo exige reiniciar o identity e o serviço cliente com o valor novo. Não há rotação sem parada nesta
   fatia.
 - Os segredos ficam como texto no env, sem cofre de segredos. Aceito para a demo local.
+- Qualquer token de serviço válido passa no `require_service`: não há lista de `client_id` permitidos por rota. Hoje o
+  cart é o único cliente cadastrado em `IDENTITY_SERVICE_CLIENTS`, então isso não abre nada; a lista por rota chega na
+  fatia 3, com orders, payments e shipping como novos clientes.
 - O cart passa a depender do identity para chamar catalog e promotions. Com o identity fora, o token em cache vale até
   expirar; depois disso adicionar item falha e o cupom aparece como indisponível.
 

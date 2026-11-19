@@ -43,7 +43,8 @@ O que existe hoje:
 - Node.js 26 LTS e pnpm 12.18.0. O pnpm vem pelo campo `packageManager` do `package.json` (com Corepack ativado, ou
   instale a versão indicada).
 - uv. O Python 3.15.2 é baixado e gerenciado pelo uv.
-- As portas 80, 8081, 15672, 16686 e 3001 livres no host. Para mudar a porta 80, altere `KATOSHOP_HTTP_PORT` no `.env`.
+- As portas 80, 8081, 15672, 16686, 3001 e 9090 livres no host (16686, 3001 e 9090 só com o perfil `observability`).
+  Para mudar a porta 80, altere `KATOSHOP_HTTP_PORT` no `.env`.
 - Navegadores modernos resolvem `*.localhost` para a máquina local sem configuração.
 
 ## Como rodar
@@ -103,6 +104,7 @@ docker compose --profile observability up -d
 | RabbitMQ (UI de gestão) | http://127.0.0.1:15672 (usuário e senha `RABBITMQ_USER`/`RABBITMQ_PASSWORD` do `.env`) |
 | Jaeger (perfil `observability`) | http://localhost:16686 |
 | Grafana (perfil `observability`) | http://localhost:3001 |
+| Prometheus (perfil `observability`) | http://127.0.0.1:9090 |
 
 ### Credencial demo do admin
 
@@ -239,6 +241,12 @@ docs/                    arquitetura, ADRs, specs e planos
 - Eventos publicados antes de o cart declarar a fila `cart.catalog-events` (primeira subida com o cart parado) se
   perdem, porque o exchange não tem fila ligada. O compose sobe o cart junto com o broker, e um item adicionado depois
   lê o preço atual ([ADR 0008](docs/adr/0008-outbox-e-mensageria.md)).
+- O item do carrinho guarda um snapshot de categoria e coleções feito ao adicionar, e os eventos do catalog só atualizam
+  preço e estoque. Se o produto mudar de categoria ou de coleção, a elegibilidade de um cupom restrito pode ficar
+  desatualizada até o cliente adicionar o item de novo. O checkout da fatia 3 relê o catalog antes de cobrar.
+- Uma linha arquivada continua arquivada no carrinho mesmo que o produto volte a ser publicado, até o cliente
+  adicionar o item de novo. É o custo de o arquivado ser permanente (ruling S7), que impede um evento de estoque fora de
+  ordem de reviver um produto arquivado.
 - O arquivamento de produto não tem versão. Uma reentrega depois de um processamento parcial pode fazer reaparecer um
   aviso de item arquivado que o cliente já tinha confirmado com "Entendi"
   ([ADR 0008](docs/adr/0008-outbox-e-mensageria.md)).

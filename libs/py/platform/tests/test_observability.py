@@ -174,12 +174,13 @@ def test_configure_observability_twice_keeps_messaging_instrumentation(otel_rese
 
 async def test_redis_commands_produce_client_spans(otel_reset):
     from redis.asyncio import Redis
+    from redis.exceptions import ConnectionError as RedisConnectionError
 
     exporter = InMemorySpanExporter()
     configure_observability(_app(), _settings(), span_exporter=exporter)
     # porta fechada: o comando falha, mas o span do cliente é criado e registra o erro
     client = Redis(host="127.0.0.1", port=1, socket_connect_timeout=0.2)
-    with pytest.raises(Exception):  # noqa: B017
+    with pytest.raises(RedisConnectionError):
         await client.ping()
     await client.aclose()
     spans = [s for s in exporter.get_finished_spans() if s.kind == SpanKind.CLIENT]

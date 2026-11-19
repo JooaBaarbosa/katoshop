@@ -274,10 +274,15 @@ async def test_stock_event_reduces_quantity_or_marks_unavailable(
     assert (await line(repo, cart_id, v2)).notice == Notice("unavailable")
 
 
-async def test_applied_event_is_logged_with_cart_count(repo: RedisCartRepository) -> None:
+async def test_applied_event_is_logged_with_cart_count(
+    repo: RedisCartRepository, redis: Redis
+) -> None:
     v = vid()
     await guest_with(repo, make_item(v))
     await guest_with(repo, make_item(v))
+    # carrinho expirado ainda no índice: não conta como atualizado
+    expired = await guest_with(repo, make_item(v))
+    await redis.delete(f"cart:{expired}", f"cart:{expired}:items")
     event = stock_event(v, 7, 2)
 
     with capture_logs() as logs:

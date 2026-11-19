@@ -119,9 +119,11 @@ async def handle_catalog_event(event: Envelope, repo: CartRepository) -> None:
         for cart_id in await repo.carts_for_variant(variant_id):
             carts.setdefault(cart_id, []).append(variant_id)
 
+    updated = 0
     for cart_id, variant_ids in carts.items():
         try:
             await repo.mutate(cart_id, _applier(variant_ids, plan.update), renew_ttl=False)
+            updated += 1
         except CartError as exc:
             if exc.code != "cart.cart.not_found":
                 raise
@@ -130,7 +132,7 @@ async def handle_catalog_event(event: Envelope, repo: CartRepository) -> None:
             for variant_id in variant_ids:
                 await repo.forget_variant_cart(variant_id, cart_id)
     await repo.mark_processed(event_id)
-    log.info("catalog_event.applied", event_id=event_id, type=event.type, carts=len(carts))
+    log.info("catalog_event.applied", event_id=event_id, type=event.type, carts=updated)
 
 
 class CatalogEventsConsumer:

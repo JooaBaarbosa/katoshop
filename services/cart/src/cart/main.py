@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from redis.asyncio import Redis
 
 from cart.adapters.catalog_client import CatalogClient
+from cart.adapters.consumer import CatalogEventsConsumer
 from cart.adapters.promotions_client import PromotionsClient
 from cart.adapters.redis_repo import RedisCartRepository
 from cart.api.errors import install_cart_error_handlers
@@ -80,8 +81,16 @@ def create_app(
                 )
                 stack.push_async_callback(redis.aclose)
             app.state.redis = redis
-            app.state.cart_repository = RedisCartRepository(redis, guest_ttl_s=settings.guest_ttl_s)
+            repo = RedisCartRepository(redis, guest_ttl_s=settings.guest_ttl_s)
+            app.state.cart_repository = repo
             _open_upstreams(app, settings, stack, catalog, promotions)
+            if settings.amqp_url:
+                # Sobe em segundo plano: broker fora não impede o cart de subir nem afeta a
+                # prontidão (que depende só do Redis). Registrado depois do Redis, então o
+                # desligamento para de consumir antes de fechar o Redis.
+                consumer = CatalogEventsConsumer(settings.amqp_url, repo)
+                consumer.start()
+                stack.push_async_callback(consumer.stop)
             yield
 
     app = FastAPI(title="KatoShop cart", lifespan=lifespan)

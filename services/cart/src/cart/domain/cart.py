@@ -178,6 +178,14 @@ def merge(account: Cart, guest: Cart, *, max_lines: int, max_qty: int) -> MergeR
                 result.reduced.append(variant_id)
             continue
         fresh = g if g.variant_version > a.variant_version else a
+        if a.archived or g.archived:
+            # Arquivado é sticky também no merge (S10): um visitante que perdeu o evento de
+            # arquivamento não pode reviver a linha. Os demais campos vêm do mais novo.
+            notice = fresh.notice if fresh.archived else _UNAVAILABLE
+            account.items[variant_id] = replace(
+                fresh, archived=True, unavailable=True, notice=notice
+            )
+            continue
         if a.unavailable or g.unavailable:
             account.items[variant_id] = fresh
             continue

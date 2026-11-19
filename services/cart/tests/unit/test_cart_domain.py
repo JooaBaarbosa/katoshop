@@ -448,3 +448,30 @@ def test_merge_keeps_unacked_notice() -> None:
 def test_set_quantity_requires_max_qty_keyword() -> None:
     with pytest.raises(TypeError):
         set_quantity(cart(snap(quantity=1)), "v1", 2)  # type: ignore[call-arg]  # pyright: ignore[reportCallIssue]
+
+
+def test_merge_archived_account_stays_archived_against_fresher_guest() -> None:
+    # S10: o visitante perdeu o evento de arquivamento; a versão mais nova não revive a linha.
+    gone = snap(quantity=2, version=2)
+    apply_archived(gone)
+    account = cart(gone, owner="user:u")
+    merge(account, cart(snap(quantity=1, version=9, price=1500)), **LIMITS)
+    line = account.items["v1"]
+    assert line.archived is True
+    assert line.unavailable is True
+    assert line.notice == Notice("unavailable")
+    assert line.variant_version == 9
+    assert line.unit_price_cents == 1500
+
+
+def test_merge_archived_guest_archives_fresher_account_line() -> None:
+    gone = snap(quantity=1, version=2)
+    apply_archived(gone)
+    account = cart(snap(quantity=3, version=8), owner="user:u")
+    merge(account, cart(gone), **LIMITS)
+    line = account.items["v1"]
+    assert line.archived is True
+    assert line.unavailable is True
+    assert line.notice == Notice("unavailable")
+    assert line.variant_version == 8
+    assert line.quantity == 3

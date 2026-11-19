@@ -19,10 +19,15 @@ export const CART_FLASH_MERGE_ADJUSTED = "merge_adjusted";
 
 const CART_COOKIE_MAX_AGE_SECONDS = 2_592_000; // 30 dias, como o TTL do carrinho de visitante
 const CART_FLASH_MAX_AGE_SECONDS = 120;
-/** Leitura do cabeçalho: um cart travado não pode segurar toda página da loja. */
-const READ_TIMEOUT_MS = 2000;
-/** Escrita: o cart consulta o catalog e pode renovar o token de serviço antes de responder. */
-const WRITE_TIMEOUT_MS = 5000;
+/**
+ * Orçamentos aninhados (S12): o tempo do BFF cobre o pior caso do cart, que por sua vez cobre
+ * o dos serviços que ele chama. Leitura: o cart avalia o cupom em no máximo 800 ms e degrada
+ * para desconto 0, então 4 s só estoura com o próprio cart travado (e a página não pode
+ * esperar mais que isso). Escrita: o cart lê o catalog e avalia o cupom (2 s cada, com uma
+ * renovação de token e um retry após 401), então 10 s.
+ */
+const READ_TIMEOUT_MS = 4000;
+const WRITE_TIMEOUT_MS = 10_000;
 
 // Texto canônico (minúsculo, com hífens) de um UUIDv4, a única forma que o cart aceita como
 // visitante (Ruling S8). Outro valor no cookie nem chega ao cart.

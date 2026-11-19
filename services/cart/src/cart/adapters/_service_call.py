@@ -25,12 +25,15 @@ async def call_service(
     target: str,
     json: Any = None,
     timeout_s: float = 2.0,
+    retry_unauthorized: bool = True,
 ) -> httpx.Response:
     """Devolve a resposta (qualquer status exceto 401 final e 5xx).
 
-    No primeiro 401 (corrida com a expiração do token) invalida o cache e repete uma vez.
+    No primeiro 401 (corrida com a expiração do token) invalida o cache e repete uma vez;
+    `retry_unauthorized=False` só invalida (o próximo uso renova) e falha já.
     """
-    for attempt in (1, 2):
+    attempts = (1, 2) if retry_unauthorized else (2,)
+    for attempt in attempts:
         try:
             token = await tokens.token()
             response = await http.request(
@@ -43,9 +46,10 @@ async def call_service(
         except (ProblemError, httpx.HTTPError) as exc:
             log.warning("service_call.failed", target=target, error=type(exc).__name__)
             raise ServiceUnavailableError(target) from exc
-        if response.status_code == 401 and attempt == 1:
+        if response.status_code == 401:
             tokens.invalidate(token)
-            continue
+            if attempt == 1:
+                continue
         if response.status_code == 401 or response.status_code >= 500:
             log.warning("service_call.bad_status", target=target, status=response.status_code)
             raise ServiceUnavailableError(target)

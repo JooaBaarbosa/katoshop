@@ -1,4 +1,6 @@
+import asyncio
 import json
+import time
 from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
@@ -252,6 +254,63 @@ async def test_evaluate_timeout_is_unavailable() -> None:
 
     result = await _promotions(handler).evaluate("X", None, [_item()])
     assert result == CouponResult(valid=False, reason="promotions.unavailable")
+
+
+async def test_evaluate_read_budget_degrades_when_promotions_is_slow() -> None:
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(1.5)
+        return httpx.Response(200, json=_OK)
+
+    client = PromotionsClient(
+        "http://promotions", _tokens(), httpx.AsyncClient(transport=httpx.MockTransport(slow))
+    )
+    started = time.monotonic()
+    result = await client.evaluate("BEMVINDO10", None, [_item()], read=True)
+    assert result == CouponResult(valid=False, reason="promotions.unavailable")
+    assert time.monotonic() - started < 1.2
+
+
+async def test_evaluate_read_budget_includes_token_issuance() -> None:
+    async def slow_identity(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(1.5)
+        return httpx.Response(200, json={"access_token": "t", "expires_in": 300})
+
+    tokens = ServiceTokenProvider(
+        "http://identity/token",
+        "cart",
+        "s",
+        http=httpx.AsyncClient(transport=httpx.MockTransport(slow_identity)),
+    )
+    client = PromotionsClient("http://promotions", tokens, _http(lambda r: httpx.Response(200)))
+    started = time.monotonic()
+    result = await client.evaluate("BEMVINDO10", None, [_item()], read=True)
+    assert result.reason == "promotions.unavailable"
+    assert time.monotonic() - started < 1.2
+
+
+async def test_evaluate_write_budget_waits_for_slow_promotions() -> None:
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(1.2)
+        return httpx.Response(200, json=_OK)
+
+    result = await PromotionsClient(
+        "http://promotions", _tokens(), httpx.AsyncClient(transport=httpx.MockTransport(slow))
+    ).evaluate("BEMVINDO10", None, [_item()])
+    assert result.valid is True
+
+
+@pytest.mark.parametrize(("read", "expected_calls"), [(True, 1), (False, 2)])
+async def test_evaluate_401_retry_only_outside_read_budget(read: bool, expected_calls: int) -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(401)
+
+    result = await _promotions(handler).evaluate("BEMVINDO10", None, [_item()], read=read)
+    assert result.reason == "promotions.unavailable"
+    assert calls == expected_calls
 
 
 @pytest.mark.parametrize("status", [500, 502, 422])

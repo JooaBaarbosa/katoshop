@@ -120,18 +120,21 @@ class CartService:
     async def view(self, identity: Identity) -> CartView:
         return await self._render(await self._resolve(identity))
 
-    async def _evaluate(self, cart: Cart, code: str) -> CouponResult:
+    async def _evaluate(self, cart: Cart, code: str, *, read: bool = False) -> CouponResult:
         items = list(cart.items.values())
         if not any(not i.unavailable for i in items):
             return CouponResult(valid=False, reason=NO_ELIGIBLE_ITEMS)
-        return await self._promotions.evaluate(code, _customer_id(cart), items)
+        return await self._promotions.evaluate(code, _customer_id(cart), items, read=read)
 
     async def _coupon(self, cart: Cart, code: str) -> CouponResult:
-        """Avaliação com cache de 30 s por versão do carrinho (spec §4.5)."""
+        """Avaliação com cache de 30 s por versão do carrinho (spec §4.5).
+
+        Só monta a resposta: orçamento curto de leitura (S12), degrada para desconto 0.
+        """
         cached = await self._repo.cached_discount(cart.cart_id, cart.version)
         if cached is not None:
             return _result_from_cache(cached)
-        result = await self._evaluate(cart, code)
+        result = await self._evaluate(cart, code, read=True)
         await self._cache(cart, result)
         return result
 

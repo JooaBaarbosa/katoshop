@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -31,6 +32,12 @@ def _unavailable() -> CouponResult:
     return CouponResult(valid=False, reason="promotions.unavailable")
 
 
+# Orçamento da avaliação que só monta a resposta do carrinho (GET e o corpo das mutações), com
+# token incluído e sem o retry do 401 (S12): promotions lento degrada para desconto 0 em vez de
+# estourar o timeout do BFF.
+READ_TIMEOUT_S = 0.8
+
+
 class PromotionsClient:
     def __init__(
         self,
@@ -38,16 +45,22 @@ class PromotionsClient:
         tokens: ServiceTokenProvider,
         http: httpx.AsyncClient,
         timeout_s: float = 2.0,
+        read_timeout_s: float = READ_TIMEOUT_S,
     ) -> None:
         self._timeout_s = timeout_s
+        self._read_timeout_s = read_timeout_s
         self._base_url = base_url.rstrip("/")
         self._tokens = tokens
         self._http = http
 
     async def evaluate(
-        self, code: str, customer_id: str | None, items: list[CartItem]
+        self, code: str, customer_id: str | None, items: list[CartItem], *, read: bool = False
     ) -> CouponResult:
-        """Avalia o cupom sobre os itens disponíveis; nunca levanta por falha do destino."""
+        """Avalia o cupom sobre os itens disponíveis; nunca levanta por falha do destino.
+
+        `read=True`: orçamento curto (`read_timeout_s`, token incluído) e sem retry do 401.
+        `read=False` (PUT do cupom, merge): `timeout_s` por tentativa, com o retry.
+        """
         eligible = [i for i in items if not i.unavailable]
         if not eligible:
             return CouponResult(valid=False, reason="promotions.coupon.no_eligible_items")
@@ -65,17 +78,34 @@ class PromotionsClient:
                 for i in eligible
             ],
         }
+        url = f"{self._base_url}/v1/promotions/evaluate"
         try:
-            response = await call_service(
-                self._http,
-                self._tokens,
-                "POST",
-                f"{self._base_url}/v1/promotions/evaluate",
-                target="promotions",
-                json=body,
-                timeout_s=self._timeout_s,
-            )
+            if read:
+                async with asyncio.timeout(self._read_timeout_s):
+                    response = await call_service(
+                        self._http,
+                        self._tokens,
+                        "POST",
+                        url,
+                        target="promotions",
+                        json=body,
+                        timeout_s=self._read_timeout_s,
+                        retry_unauthorized=False,
+                    )
+            else:
+                response = await call_service(
+                    self._http,
+                    self._tokens,
+                    "POST",
+                    url,
+                    target="promotions",
+                    json=body,
+                    timeout_s=self._timeout_s,
+                )
         except ServiceUnavailableError:
+            return _unavailable()
+        except TimeoutError:
+            log.warning("promotions.read_budget_exceeded", budget_s=self._read_timeout_s)
             return _unavailable()
         if response.status_code != 200:
             log.warning("promotions.unexpected_status", status=response.status_code)

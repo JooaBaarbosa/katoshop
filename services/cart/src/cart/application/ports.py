@@ -60,7 +60,10 @@ class CatalogPort(Protocol):
 
 class PromotionsPort(Protocol):
     async def evaluate(
-        self, code: str, customer_id: str | None, items: list[CartItem]
+        self, code: str, customer_id: str | None, items: list[CartItem], *, read: bool = False
     ) -> CouponResult:
-        """Nunca levanta: falha do promotions vira `reason="promotions.unavailable"`."""
+        """Nunca levanta: falha do promotions vira `reason="promotions.unavailable"`.
+
+        `read=True` só monta a resposta: orçamento curto, sem retry (S12).
+        """
         ...

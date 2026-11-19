@@ -241,3 +241,27 @@ describe("mergeGuestCart", () => {
     expect(mocks.jar.has(CART_COOKIE)).toBe(false);
   });
 });
+
+describe("orçamentos de tempo (S12)", () => {
+  it("leitura usa AbortSignal.timeout(4000)", async () => {
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    mocks.jar.set(CART_COOKIE, { value: GUEST_ID });
+    mocks.get.mockResolvedValue(ok(cartOut(GUEST_ID)));
+    await getCart();
+    expect(spy).toHaveBeenCalledWith(4000);
+    spy.mockRestore();
+  });
+
+  it("escrita e merge usam AbortSignal.timeout(10000)", async () => {
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    const call = vi.fn().mockResolvedValue(ok(cartOut(GUEST_ID)));
+    await mutateCart(call);
+    expect(spy).toHaveBeenCalledWith(10000);
+    spy.mockClear();
+    mocks.jar.set(CART_COOKIE, { value: GUEST_ID });
+    mocks.post.mockResolvedValue(ok({ ...cartOut(ACCOUNT_ID), merge_report: { reduced: [], dropped: [] } }));
+    await mergeGuestCart("at");
+    expect(spy).toHaveBeenCalledWith(10000);
+    spy.mockRestore();
+  });
+});

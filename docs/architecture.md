@@ -54,8 +54,10 @@ do cupom (tabela `coupon_redemptions`) já existe, mas só é gravada no checkou
 - **Leitura entre serviços:** REST síncrono pelo cliente HTTP da lib compartilhada (`ks_platform/http.py`): timeout curto
   (2 s), uma nova tentativa só para GET que falhou ao conectar (nunca para outros métodos) e propagação do
   `traceparent`. Na fatia 2 o cart chama o catalog (variante interna) e o promotions (evaluate) com timeout de 2 s e um
-  token de serviço ([ADR 0009](adr/0009-token-de-servico.md)). Um circuit breaker simples está previsto (spec geral,
-  seção 3.2), mas ainda não existe.
+  token de serviço ([ADR 0009](adr/0009-token-de-servico.md)). Os orçamentos se aninham (ruling S12): a avaliação do
+  cupom que só monta a resposta do carrinho tem 800 ms no total, token incluído e sem o retry do 401, e degrada para
+  desconto 0; o PUT do cupom mantém 2 s. O BFF da loja espera o cart por 4 s na leitura e 10 s na escrita. Um circuit
+  breaker simples está previsto (spec geral, seção 3.2), mas ainda não existe.
 - **Mudança de estado que outros precisam saber:** evento publicado via transactional outbox. A linha do evento entra
   na mesma transação da mudança e um relay publica no RabbitMQ ([ADR 0003](adr/0003-rabbitmq.md),
   [ADR 0008](adr/0008-outbox-e-mensageria.md)).

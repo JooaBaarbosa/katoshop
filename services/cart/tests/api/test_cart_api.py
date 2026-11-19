@@ -10,11 +10,12 @@ import pytest
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
-from cart.adapters.promotions_client import CouponResult
+from cart.adapters.promotions_client import CouponResult, PromotionsClient
 from cart.domain.cart import CartError, CartItem
 from cart.main import create_app
 from cart.settings import CartSettings
 from ks_platform.auth import JwksKeyProvider, TokenVerifier
+from ks_platform.service_tokens import ServiceTokenProvider
 
 
 class Signer(Protocol):
@@ -79,12 +80,14 @@ class FakePromotions:
 
     down: bool = False
     calls: list[tuple[str, str | None]] = field(default_factory=list)
+    reads: list[bool] = field(default_factory=list)  # `read` de cada chamada (S12)
     invalid_now: set[str] = field(default_factory=set)
 
     async def evaluate(
-        self, code: str, customer_id: str | None, items: list[CartItem]
+        self, code: str, customer_id: str | None, items: list[CartItem], *, read: bool = False
     ) -> CouponResult:
         self.calls.append((code, customer_id))
+        self.reads.append(read)
         if self.down:
             return CouponResult(valid=False, reason="promotions.unavailable")
         eligible = [i for i in items if not i.unavailable]
@@ -568,6 +571,83 @@ async def test_promotions_down_get_200_without_discount(
     assert body["total_cents"] == body["subtotal_cents"] == 10000
     promotions.down = False  # a falha não fica em cache
     assert (await api.get("/v1/cart", headers=guest(cart_id))).json()["discount_cents"] == 1000
+
+
+async def test_render_uses_read_budget_and_put_coupon_uses_write_budget(
+    api: httpx.AsyncClient, promotions: FakePromotions
+) -> None:
+    # S12: a avaliação que só monta a resposta usa o orçamento curto; o PUT do cupom, o longo.
+    cart_id = await new_guest_cart(api, V1, 1)
+    await api.put("/v1/cart/coupon", json={"code": "BEMVINDO10"}, headers=guest(cart_id))
+    assert promotions.reads == [False]
+    await api.patch(f"/v1/cart/items/{V1}", json={"quantity": 2}, headers=guest(cart_id))
+    await api.post("/v1/cart/notices/ack", headers=guest(cart_id))
+    assert promotions.reads[1:]
+    assert all(promotions.reads[1:])
+
+
+async def test_get_degrades_when_promotions_is_slow(
+    redis_url: str,
+    redis: Redis,
+    catalog: FakeCatalog,
+    signer: Signer,
+    asgi_client_factory: Callable[[FastAPI], AbstractAsyncContextManager[httpx.AsyncClient]],
+) -> None:
+    """Promotions real (HTTP) que demora 1,2 s: o PUT espera (2 s), o GET degrada (800 ms)."""
+
+    async def slow_promotions(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(1.2)
+        body = {
+            "valid": True,
+            "code": "BEMVINDO10",
+            "discount_cents": 500,
+            "per_item": [{"variant_id": V1, "discount_cents": 500}],
+            "reason": None,
+            "min_order_cents": None,
+        }
+        return httpx.Response(200, json=body)
+
+    def issue(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"access_token": "tok", "expires_in": 300})
+
+    tokens = ServiceTokenProvider(
+        "http://identity/token",
+        "cart",
+        "s",
+        http=httpx.AsyncClient(transport=httpx.MockTransport(issue)),
+    )
+    client = PromotionsClient(
+        "http://promotions",
+        tokens,
+        httpx.AsyncClient(transport=httpx.MockTransport(slow_promotions)),
+    )
+    settings = CartSettings(redis_url=redis_url, client_secret="x", guest_ttl_s=3600)  # noqa: S106
+    application = create_app(settings, catalog=catalog, promotions=client)
+
+    async def fetch(_url: str) -> dict[str, Any]:
+        return signer.jwks
+
+    application.state.token_verifier = TokenVerifier(
+        JwksKeyProvider("http://test/jwks", fetch=fetch)
+    )
+    async with asgi_client_factory(application) as slow_api:
+        cart_id = await new_guest_cart(slow_api, V1, 1)
+        put = await slow_api.put(
+            "/v1/cart/coupon", json={"code": "BEMVINDO10"}, headers=guest(cart_id)
+        )
+        assert put.status_code == 200, put.text
+        assert put.json()["discount_cents"] == 500
+        await redis.delete(*await redis.keys(f"cart:{cart_id}:discount:*"))  # sem cache
+
+        started = asyncio.get_running_loop().time()
+        resp = await slow_api.get("/v1/cart", headers=guest(cart_id))
+        elapsed = asyncio.get_running_loop().time() - started
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["coupon"]["reason"] == "promotions.unavailable"
+    assert body["discount_cents"] == 0
+    assert elapsed < 1.1
 
 
 async def test_get_reuses_cached_evaluation_for_same_version(

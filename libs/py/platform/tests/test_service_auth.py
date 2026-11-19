@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import time
 import uuid
 
@@ -170,6 +171,49 @@ async def test_provider_network_failure_raises_503() -> None:
     with pytest.raises(ProblemError) as exc:
         await provider.token()
     assert (exc.value.status, exc.value.code) == (503, "auth.service_token_unavailable")
+
+
+async def test_provider_logs_identity_status_and_problem_code(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Segredo divergente (CART_CLIENT_SECRET x IDENTITY_SERVICE_CLIENTS) precisa ser diagnosticável.
+    def reject(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"code": "identity.service.invalid_client", "status": 401})
+
+    provider = ServiceTokenProvider(
+        "http://identity/v1/auth/service-token",
+        "cart",
+        "s3cret",
+        http=httpx.AsyncClient(transport=httpx.MockTransport(reject)),
+    )
+    with caplog.at_level(logging.WARNING, logger="ks_platform.service_tokens"):
+        with pytest.raises(ProblemError):
+            await provider.token()
+    (record,) = caplog.records
+    message = record.getMessage()
+    assert "status=401" in message
+    assert "code=identity.service.invalid_client" in message
+    assert "client_id=cart" in message
+    assert "s3cret" not in message
+
+
+async def test_provider_logs_network_failure_without_status(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def boom(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("down")
+
+    provider = ServiceTokenProvider(
+        "http://identity/x",
+        "cart",
+        "s",
+        http=httpx.AsyncClient(transport=httpx.MockTransport(boom)),
+    )
+    with caplog.at_level(logging.WARNING, logger="ks_platform.service_tokens"):
+        with pytest.raises(ProblemError):
+            await provider.token()
+    (record,) = caplog.records
+    assert "error=ConnectError" in record.getMessage()
 
 
 async def test_provider_failure_does_not_poison_cache() -> None:

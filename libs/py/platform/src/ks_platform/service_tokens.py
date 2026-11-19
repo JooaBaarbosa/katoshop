@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 import time
 from collections.abc import Callable
@@ -8,8 +9,19 @@ import httpx
 
 from ks_platform.errors import ProblemError
 
+logger = logging.getLogger("ks_platform.service_tokens")
+
 _RENEW_MARGIN_S = 30.0
 _MAX_TTL_S = 3600.0
+
+
+def _problem_code(response: httpx.Response) -> str | None:
+    """`code` do problem+json do identity, se houver (o corpo pode não ser JSON)."""
+    try:
+        code = response.json().get("code")
+    except ValueError, AttributeError:
+        return None
+    return code if isinstance(code, str) else None
 
 
 def _unavailable() -> ProblemError:
@@ -82,7 +94,22 @@ class ServiceTokenProvider:
             if not math.isfinite(raw_ttl) or raw_ttl <= 0:
                 raise ValueError("expires_in inválido")
             expires_in = min(float(raw_ttl), _MAX_TTL_S)
+        except httpx.HTTPStatusError as exc:
+            # Status e código do identity (ex.: 401 identity.service.invalid_client quando o
+            # segredo do cliente não bate com IDENTITY_SERVICE_CLIENTS); nunca o segredo.
+            logger.warning(
+                "service_token.issue_failed client_id=%s status=%s code=%s",
+                self._client_id,
+                exc.response.status_code,
+                _problem_code(exc.response),
+            )
+            raise _unavailable() from exc
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+            logger.warning(
+                "service_token.issue_failed client_id=%s error=%s",
+                self._client_id,
+                type(exc).__name__,
+            )
             raise _unavailable() from exc
         self._token = token
         self._renew_at = requested_at + expires_in - min(_RENEW_MARGIN_S, expires_in / 2)

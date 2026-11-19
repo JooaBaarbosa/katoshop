@@ -134,3 +134,24 @@ def test_storefront_settings() -> None:
     assert policies["demo_notice"] == "Loja demonstrativa, nenhuma compra é real"
     assert policies["shipping_text"] and policies["returns_text"]
     assert set(s["featured_collection_slugs"]) <= {c.slug for c in data.COLLECTIONS}
+
+
+COUPON_CODE = re.compile(r"^[A-Z0-9-]{3,32}$")
+
+
+def test_demo_coupon_bemvindo10() -> None:
+    coupon = next(c for c in data.COUPONS if c.code == "BEMVINDO10")
+    assert coupon.kind == "percent"
+    assert coupon.value == 10
+    assert coupon.min_order_cents == 15000
+    assert coupon.description == "Cupom da loja demonstrativa"
+
+
+def test_coupon_codes_are_valid_and_unique() -> None:
+    codes = [c.code for c in data.COUPONS]
+    assert codes and len(set(codes)) == len(codes)
+    for coupon in data.COUPONS:
+        assert COUPON_CODE.fullmatch(coupon.code), coupon.code
+        # o archive_test_data desativa os E2E-*; um cupom do seed nunca pode casar
+        assert not coupon.code.startswith("E2E-")
+        assert "demonstrativa" in coupon.description

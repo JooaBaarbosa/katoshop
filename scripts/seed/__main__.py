@@ -1,7 +1,8 @@
 """Seed idempotente da loja demo: `python -m seed` (a partir de scripts/).
 
 Carrega categorias, coleções, produtos, variantes, estoque inicial, fotos creditadas e a
-configuração da vitrine pelas APIs de admin. Rodar de novo não cria nada repetido.
+configuração da vitrine pelas APIs de admin do catálogo, e o cupom demo pelo admin do
+promotions. Rodar de novo não cria nada repetido.
 """
 
 import hashlib
@@ -17,7 +18,7 @@ import httpx
 from PIL import Image
 
 from seed import data
-from seed.client import CatalogAdmin, SeedError, staff_login
+from seed.client import CatalogAdmin, PromotionsAdmin, SeedError, staff_login
 
 SEED_DIR = Path(__file__).resolve().parent
 MANIFEST = SEED_DIR / "images.json"
@@ -248,6 +249,25 @@ def seed_settings(api: CatalogAdmin, http: httpx.Client, images: list[dict[str, 
     api.put_settings(data.storefront_settings(photo_storage_key(photo_bytes(http, hero))))
 
 
+def seed_coupons(api: PromotionsAdmin, counts: Counter[str]) -> None:
+    """Upsert pelo código que só cria: um cupom existente (talvez alterado no admin) fica igual."""
+    for coupon in data.COUPONS:
+        if api.find_coupon(coupon.code) is not None:
+            counts["cupons já existentes"] += 1
+            continue
+        api.create_coupon(
+            {
+                "code": coupon.code,
+                "description": coupon.description,
+                "kind": coupon.kind,
+                "value": coupon.value,
+                "min_order_cents": coupon.min_order_cents,
+                "active": True,
+            }
+        )
+        counts["cupons criados"] += 1
+
+
 # ---------------------------------------------------------------------------- main
 
 
@@ -265,6 +285,7 @@ def run() -> None:
         product_ids = seed_products(api, http, category_ids, images, counts)
         seed_collection_products(api, collection_ids, product_ids)
         seed_settings(api, http, images)
+        seed_coupons(PromotionsAdmin(http, api_url, token), counts)
         overview = api.overview()
 
     print("Seed concluído (dados demonstrativos).")
@@ -281,6 +302,8 @@ def run() -> None:
         "fotos criadas",
         "fotos já existentes",
         "fotos removidas",
+        "cupons criados",
+        "cupons já existentes",
     ):
         print(f"  {key}: {counts[key]}")
     status = overview["products_by_status"]

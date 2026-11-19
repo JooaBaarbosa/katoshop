@@ -139,3 +139,42 @@ class CatalogAdmin:
 
     def overview(self) -> dict[str, Any]:
         return self._get("/overview")
+
+
+class PromotionsAdmin:
+    """Admin de cupons do promotions (mesmo token de funcionário do catálogo)."""
+
+    def __init__(self, http: httpx.Client, api_url: str, token: str) -> None:
+        self._http = http
+        self._base = f"{api_url}/promotions/v1/admin/coupons"
+        self._auth = {"Authorization": f"Bearer {token}"}
+
+    def coupons_page(
+        self, q: str, active: bool | None = None, cursor: str | None = None
+    ) -> dict[str, Any]:
+        """Uma página da lista (busca `q` por trecho do código ou da descrição)."""
+        params = {"q": q, "limit": "100"}
+        if active is not None:
+            params["active"] = "true" if active else "false"
+        if cursor:
+            params["cursor"] = cursor
+        response = self._http.get(self._base, params=params, headers=self._auth)
+        return _check(response, 200).json()
+
+    def find_coupon(self, code: str) -> dict[str, Any] | None:
+        """Cupom com exatamente esse código, ou None."""
+        cursor: str | None = None
+        while True:
+            page = self.coupons_page(code, cursor=cursor)
+            match = next((c for c in page["items"] if c["code"] == code), None)
+            cursor = page["next_cursor"]
+            if match is not None or not cursor:
+                return match
+
+    def create_coupon(self, body: dict[str, Any]) -> dict[str, Any]:
+        response = self._http.post(self._base, json=body, headers=self._auth)
+        return _check(response, 201).json()
+
+    def deactivate(self, coupon_id: str) -> None:
+        response = self._http.post(f"{self._base}/{coupon_id}/deactivate", headers=self._auth)
+        _check(response, 200)

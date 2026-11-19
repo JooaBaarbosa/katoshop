@@ -499,6 +499,27 @@ COLLECTIONS = (
     ),
 )
 
+
+@dataclass(frozen=True)
+class Coupon:
+    code: str
+    description: str
+    kind: str
+    value: int
+    min_order_cents: int | None
+
+
+# Cupons da loja demo. O seed só cria: um cupom que o admin alterou ou desativou fica como está.
+COUPONS = (
+    Coupon(
+        code="BEMVINDO10",
+        description="Cupom da loja demonstrativa",
+        kind="percent",
+        value=10,
+        min_order_cents=15000,
+    ),
+)
+
 # Foto do hero: moletom oversized diante de um prédio de tijolos, sem marcas nem letreiros
 # (também é foto de produto, então o arquivo existe e aparece em /creditos).
 HERO_IMAGE_ID = "unsplash-0Aol_QLmhmA"

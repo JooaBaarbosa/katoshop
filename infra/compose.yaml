@@ -258,6 +258,9 @@ services:
         condition: service_healthy
       catalog:
         condition: service_healthy
+      # cupom demo (BEMVINDO10) pelo admin do promotions
+      promotions:
+        condition: service_healthy
       traefik:
         condition: service_started
     volumes:

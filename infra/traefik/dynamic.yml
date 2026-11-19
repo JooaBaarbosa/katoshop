@@ -1,8 +1,21 @@
-# Rotas do gateway api.katoshop.localhost (os prefixos /identity e /catalog são
-# removidos antes de chegar aos serviços), da loja em katoshop.localhost e do painel em
-# admin.katoshop.localhost.
+# Rotas do gateway api.katoshop.localhost (os prefixos /identity, /catalog, /cart e
+# /promotions são removidos antes de chegar aos serviços), da loja em katoshop.localhost e do
+# painel em admin.katoshop.localhost.
 http:
   routers:
+    # Rotas só de serviço para serviço (rede interna do compose): o router genérico de cada
+    # serviço casaria com elas, então este bloqueio tem prioridade acima de todos e responde
+    # 404 sem chegar ao serviço. O cart não tem rota interna; o promotions só publica o admin.
+    internal-block:
+      rule: >-
+        Host(`api.katoshop.localhost`) && (PathPrefix(`/catalog/v1/internal`)
+        || PathPrefix(`/identity/v1/auth/service-token`)
+        || PathPrefix(`/promotions/v1/promotions`))
+      entryPoints: [web]
+      middlewares: [internal-not-found]
+      service: noop@internal
+      priority: 1000
+
     # Só endpoints de credencial (R15). Refresh e logout ficam de fora: os BFFs do Next
     # saem pelo mesmo IP e esgotariam o balde renovando sessões no SSR.
     identity-auth:
@@ -26,6 +39,21 @@ http:
       entryPoints: [web]
       middlewares: [catalog-body-limit, catalog-strip]
       service: catalog
+      priority: 100
+
+    cart:
+      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/cart`)"
+      entryPoints: [web]
+      middlewares: [cart-body-limit, cart-strip]
+      service: cart
+      priority: 100
+
+    # Só o admin do promotions é público; o evaluate fica na rede interna (e no internal-block).
+    promotions-admin:
+      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/promotions/v1/admin`)"
+      entryPoints: [web]
+      middlewares: [promotions-strip]
+      service: promotions
       priority: 100
 
     # R24: o Next 16 despacha Server Actions pelo cabeçalho Next-Action, em qualquer caminho
@@ -85,6 +113,15 @@ http:
       priority: 100
 
   middlewares:
+    # O noop@internal responde 418 sem corpo; aqui o 418 vira 404 (corpo vazio, nada do serviço).
+    internal-not-found:
+      errors:
+        status: ["418"]
+        service: noop@internal
+        query: "/"
+        statusRewrites:
+          "418": 404
+
     identity-strip:
       stripPrefix:
         prefixes: ["/identity"]
@@ -92,6 +129,14 @@ http:
     catalog-strip:
       stripPrefix:
         prefixes: ["/catalog"]
+
+    cart-strip:
+      stripPrefix:
+        prefixes: ["/cart"]
+
+    promotions-strip:
+      stripPrefix:
+        prefixes: ["/promotions"]
 
     # Login, login de staff e cadastro (gateway) e todo POST de Server Action ou de formulário
     # de login/cadastro das apps: 10 req/s em média, rajada de 20, por IP de origem. O Traefik
@@ -110,6 +155,11 @@ http:
       buffering:
         maxRequestBodyBytes: 9437184
 
+    # O carrinho só recebe JSON pequeno: 64 KiB (acima disso o gateway responde 413).
+    cart-body-limit:
+      buffering:
+        maxRequestBodyBytes: 65536
+
   services:
     identity:
       loadBalancer:
@@ -120,6 +170,16 @@ http:
       loadBalancer:
         servers:
           - url: "http://catalog:8000"
+
+    cart:
+      loadBalancer:
+        servers:
+          - url: "http://cart:8000"
+
+    promotions:
+      loadBalancer:
+        servers:
+          - url: "http://promotions:8000"
 
     storefront:
       loadBalancer:

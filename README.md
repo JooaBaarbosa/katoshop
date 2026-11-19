@@ -30,7 +30,7 @@ O que existe hoje:
 - Node.js 26 LTS e pnpm 12.18.0. O pnpm vem pelo campo `packageManager` do `package.json` (com Corepack ativado, ou
   instale a versão indicada).
 - uv. O Python 3.15.2 é baixado e gerenciado pelo uv.
-- As portas 80, 8081, 16686 e 3001 livres no host. Para mudar a porta 80, altere `KATOSHOP_HTTP_PORT` no `.env`.
+- As portas 80, 8081, 15672, 16686 e 3001 livres no host. Para mudar a porta 80, altere `KATOSHOP_HTTP_PORT` no `.env`.
 - Navegadores modernos resolvem `*.localhost` para a máquina local sem configuração.
 
 ## Como rodar
@@ -40,10 +40,19 @@ pnpm install && pnpm dev:up && pnpm seed
 ```
 
 - `pnpm dev:up` gera a chave de assinatura do identity em `infra/secrets/`, cria o `.env` a partir do `.env.example` (se
-  ele ainda não existir) e sobe o núcleo do Compose: Postgres, identity, catalog, Traefik, loja e admin.
+  ele ainda não existir) e sobe o núcleo do Compose: Postgres, RabbitMQ, Redis, identity, catalog, cart, promotions,
+  Traefik, loja e admin.
 - `pnpm seed` publica a loja demo (24 produtos com fotos reais creditadas). Pode ser repetido sem duplicar dados.
 - `pnpm dev:down` derruba tudo e mantém os volumes. Para apagar também os dados locais, use
   `docker compose --profile "*" down -v`.
+
+Ambiente criado antes da fatia 2 (volume do Postgres e `.env` já existentes): copie para o `.env` as chaves novas do
+`.env.example` (RabbitMQ, cart, promotions e `IDENTITY_SERVICE_CLIENTS`) e crie o banco do promotions sem apagar nada:
+
+```bash
+docker compose up -d postgres
+docker compose exec postgres sh /docker-entrypoint-initdb.d/01-databases.sh
+```
 
 Observabilidade (Jaeger, Prometheus, Grafana) fica em um perfil à parte e não sobe com o `dev:up`:
 
@@ -57,8 +66,9 @@ docker compose --profile observability up -d
 |---|---|
 | Loja | http://katoshop.localhost |
 | Admin | http://admin.katoshop.localhost |
-| API (gateway) | http://api.katoshop.localhost (`/identity/v1/...`, `/catalog/v1/...`) |
+| API (gateway) | http://api.katoshop.localhost (`/identity/v1/...`, `/catalog/v1/...`, `/cart/v1/...`, `/promotions/v1/admin/...`) |
 | Dashboard do Traefik | http://localhost:8081 |
+| RabbitMQ (UI de gestão) | http://localhost:15672 (usuário e senha `RABBITMQ_USER`/`RABBITMQ_PASSWORD` do `.env`) |
 | Jaeger (perfil `observability`) | http://localhost:16686 |
 | Grafana (perfil `observability`) | http://localhost:3001 |
 

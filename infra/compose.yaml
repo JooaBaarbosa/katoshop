@@ -1,5 +1,6 @@
 # Incluído pela raiz (compose.yaml). Caminhos relativos partem desta pasta (infra/).
-# Orçamento de memória (mem_limit): todos os serviços somados ficam em no máximo 6 GB.
+# Orçamento de memória (mem_limit): todos os serviços somados ficam em no máximo 6 GB
+# (hoje 5,25 GB com o perfil observability e o seed).
 
 x-python-service: &python-service
   restart: unless-stopped
@@ -29,6 +30,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD}
       CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+      PROMOTIONS_DB_PASSWORD: ${PROMOTIONS_DB_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
@@ -57,6 +59,8 @@ services:
       IDENTITY_BOOTSTRAP_ADMIN_EMAIL: ${IDENTITY_BOOTSTRAP_ADMIN_EMAIL}
       IDENTITY_BOOTSTRAP_ADMIN_PASSWORD: ${IDENTITY_BOOTSTRAP_ADMIN_PASSWORD}
       IDENTITY_COOKIE_SECURE: "false"
+      # client credentials dos serviços internos (JSON); segredos com pelo menos 32 caracteres
+      IDENTITY_SERVICE_CLIENTS: ${IDENTITY_SERVICE_CLIENTS}
       # métricas HTTP estáveis: http.server.request.duration em segundos
       OTEL_SEMCONV_STABILITY_OPT_IN: http
     secrets:
@@ -75,9 +79,87 @@ services:
       CATALOG_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CATALOG_MEDIA_ROOT: /data/media
       CATALOG_PUBLIC_BASE_URL: http://api.katoshop.localhost/catalog
+      # o relay da outbox publica em catalog.events; broker fora só acumula a outbox
+      CATALOG_AMQP_URL: ${CATALOG_AMQP_URL}
       OTEL_SEMCONV_STABILITY_OPT_IN: http
     volumes:
       - media-data:/data/media
+
+  promotions:
+    <<: *python-service
+    mem_limit: 256m
+    build:
+      context: ..
+      dockerfile: services/promotions/Dockerfile
+    image: katoshop/promotions:dev
+    environment:
+      PROMOTIONS_DATABASE_URL: postgresql+asyncpg://promotions_svc:${PROMOTIONS_DB_PASSWORD}@postgres:5432/promotions
+      PROMOTIONS_JWKS_URL: http://identity:8000/.well-known/jwks.json
+      PROMOTIONS_OTEL_ENDPOINT: http://otel-collector:4317
+      PROMOTIONS_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_SEMCONV_STABILITY_OPT_IN: http
+
+  # Sem banco relacional: o carrinho vive no Redis e consome catalog.events do RabbitMQ.
+  cart:
+    <<: *python-service
+    mem_limit: 256m
+    build:
+      context: ..
+      dockerfile: services/cart/Dockerfile
+    image: katoshop/cart:dev
+    environment:
+      CART_REDIS_URL: ${CART_REDIS_URL}
+      CART_AMQP_URL: ${CART_AMQP_URL}
+      CART_CATALOG_URL: ${CART_CATALOG_URL}
+      CART_PROMOTIONS_URL: ${CART_PROMOTIONS_URL}
+      CART_IDENTITY_TOKEN_URL: ${CART_IDENTITY_TOKEN_URL}
+      CART_CLIENT_SECRET: ${CART_CLIENT_SECRET}
+      CART_JWKS_URL: http://identity:8000/.well-known/jwks.json
+      CART_OTEL_ENDPOINT: http://otel-collector:4317
+      CART_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_SEMCONV_STABILITY_OPT_IN: http
+    # o cart declara a fila na subida; sobe junto com o broker para não perder eventos (S3)
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:4.4.1-management-alpine
+    # o nome do nó (rabbit@<hostname>) define a pasta de dados; fixo para o volume valer
+    hostname: rabbitmq
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      # UI de gestão só em desenvolvimento e só no loopback; AMQP e métricas ficam na rede interna
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:8.10.3-alpine
+    restart: unless-stopped
+    mem_limit: 256m
+    # AOF com fsync a cada segundo: um carrinho perde no máximo ~1 s de escrita num crash
+    command:
+      ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   storefront:
     build:
@@ -149,6 +231,8 @@ services:
     depends_on:
       - identity
       - catalog
+      - cart
+      - promotions
     networks:
       default:
         aliases:
@@ -244,6 +328,8 @@ secrets:
 volumes:
   pgdata:
   media-data:
+  rabbitmqdata:
+  redisdata:
   prometheus-data:
   grafana-data:
   seed-cache:

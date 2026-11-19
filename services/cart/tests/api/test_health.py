@@ -47,3 +47,16 @@ async def test_injected_redis_client_is_not_closed_by_lifespan(
         assert (await http_client.get("/health/ready")).status_code == 200
     assert Spy.closed == 0
     await shared.aclose()
+
+
+async def test_lifespan_closes_owned_upstream_clients(
+    redis_url: str,
+    asgi_client_factory: Callable[..., AbstractAsyncContextManager[httpx.AsyncClient]],
+) -> None:
+    app = create_app(CartSettings(redis_url=redis_url, client_secret="x"))  # noqa: S106
+    async with asgi_client_factory(app) as http_client:
+        assert (await http_client.get("/health/live")).status_code == 200
+    upstreams = [app.state.catalog, app.state.promotions]
+    clients: list[httpx.AsyncClient] = [u._http for u in upstreams]
+    clients += [u._tokens._http for u in upstreams]
+    assert all(c.is_closed for c in clients)

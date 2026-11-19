@@ -1,7 +1,8 @@
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from cart.domain.cart import Cart
+from cart.adapters.promotions_client import CouponResult
+from cart.domain.cart import Cart, CartItem
 
 
 class CartRepository(Protocol):
@@ -37,3 +38,20 @@ class CartRepository(Protocol):
     async def cached_discount(self, cart_id: str, version: int) -> dict[str, Any] | None: ...
 
     async def cache_discount(self, cart_id: str, version: int, value: dict[str, Any]) -> None: ...
+
+
+class CatalogPort(Protocol):
+    async def variant(self, variant_id: str) -> CartItem | None:
+        """Snapshot atual da variante (quantity=0); `None` se não existe.
+
+        Falha do catalog levanta `CartError("cart.catalog.unavailable")`.
+        """
+        ...
+
+
+class PromotionsPort(Protocol):
+    async def evaluate(
+        self, code: str, customer_id: str | None, items: list[CartItem]
+    ) -> CouponResult:
+        """Nunca levanta: falha do promotions vira `reason="promotions.unavailable"`."""
+        ...

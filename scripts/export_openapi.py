@@ -16,6 +16,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import FastAPI
 
+from cart.main import create_app as create_cart_app
+from cart.settings import CartSettings
 from catalog.main import create_app as create_catalog_app
 from catalog.settings import CatalogSettings
 from identity.main import create_app as create_identity_app
@@ -70,6 +72,16 @@ def build_promotions(_workdir: Path) -> FastAPI:
     )
 
 
+def build_cart(_workdir: Path) -> FastAPI:
+    return create_cart_app(
+        CartSettings(
+            _env_file=None,  # pyright: ignore[reportCallIssue]
+            jwks_url=DUMMY_JWKS_URL,
+            client_secret="openapi",  # noqa: S106
+        )
+    )
+
+
 def render(schema: dict[str, Any]) -> str:
     return json.dumps(schema, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
 
@@ -79,6 +91,7 @@ def main(output_dir: Path = OUTPUT_DIR) -> int:
         "identity": build_identity,
         "catalog": build_catalog,
         "promotions": build_promotions,
+        "cart": build_cart,
     }
     output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:

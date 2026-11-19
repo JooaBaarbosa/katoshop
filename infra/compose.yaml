@@ -79,8 +79,10 @@ services:
       CATALOG_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CATALOG_MEDIA_ROOT: /data/media
       CATALOG_PUBLIC_BASE_URL: http://api.katoshop.localhost/catalog
-      # o relay da outbox publica em catalog.events; broker fora só acumula a outbox
-      CATALOG_AMQP_URL: ${CATALOG_AMQP_URL}
+      # o relay da outbox publica em catalog.events; broker fora só acumula a outbox.
+      # URL montada das credenciais do broker (sem duplicar no .env); a senha vai crua na URL,
+      # então evite @, :, / e % nela
+      CATALOG_AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       OTEL_SEMCONV_STABILITY_OPT_IN: http
     volumes:
       - media-data:/data/media
@@ -109,7 +111,7 @@ services:
     image: katoshop/cart:dev
     environment:
       CART_REDIS_URL: ${CART_REDIS_URL}
-      CART_AMQP_URL: ${CART_AMQP_URL}
+      CART_AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       CART_CATALOG_URL: ${CART_CATALOG_URL}
       CART_PROMOTIONS_URL: ${CART_PROMOTIONS_URL}
       CART_IDENTITY_TOKEN_URL: ${CART_IDENTITY_TOKEN_URL}

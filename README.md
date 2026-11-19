@@ -65,7 +65,7 @@ Ambiente criado antes da fatia 2 (volume do Postgres e `.env` já existentes): o
 copie do `.env.example` as chaves novas:
 
 - `PROMOTIONS_DB_PASSWORD`;
-- `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `CATALOG_AMQP_URL` e `CART_AMQP_URL`;
+- `RABBITMQ_USER` e `RABBITMQ_PASSWORD` (o compose monta as URLs AMQP do catalog e do cart com eles);
 - `CART_REDIS_URL`, `CART_CATALOG_URL`, `CART_PROMOTIONS_URL` e `CART_IDENTITY_TOKEN_URL`;
 - `IDENTITY_SERVICE_CLIENTS` e `CART_CLIENT_SECRET` (o mesmo segredo nas duas);
 - `CART_API_URL` (opcional: o compose usa `http://cart:8000` se faltar).

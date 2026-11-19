@@ -10,6 +10,7 @@ import httpx
 import pytest
 from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
+from structlog.testing import capture_logs
 
 from cart.adapters.consumer import (
     BINDINGS,
@@ -271,6 +272,28 @@ async def test_stock_event_reduces_quantity_or_marks_unavailable(
     assert reduced.quantity == 3
     assert reduced.notice == Notice("quantity_reduced", quantity=3)
     assert (await line(repo, cart_id, v2)).notice == Notice("unavailable")
+
+
+async def test_applied_event_is_logged_with_cart_count(repo: RedisCartRepository) -> None:
+    v = vid()
+    await guest_with(repo, make_item(v))
+    await guest_with(repo, make_item(v))
+    event = stock_event(v, 7, 2)
+
+    with capture_logs() as logs:
+        await handle_catalog_event(event, repo)
+        await handle_catalog_event(event, repo)  # duplicado: já processado, não loga de novo
+
+    applied = [entry for entry in logs if entry["event"] == "catalog_event.applied"]
+    assert applied == [
+        {
+            "event": "catalog_event.applied",
+            "log_level": "info",
+            "event_id": str(event.id),
+            "type": STOCK_CHANGED,
+            "carts": 2,
+        }
+    ]
 
 
 @pytest.mark.parametrize(

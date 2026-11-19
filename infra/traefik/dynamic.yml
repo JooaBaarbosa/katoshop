@@ -85,13 +85,14 @@ http:
       service: storefront
       priority: 200
 
-    # Sem JavaScript, os outros formulários de Server Action (ex.: "Adicionar ao carrinho" em
-    # /p/<slug>) também postam sem o cabeçalho Next-Action. A loja não tem outro POST
-    # (nenhum route handler), então todo POST restante entra no mesmo limite por IP.
+    # R24 sem JavaScript: os outros formulários de Server Action (ex.: "Adicionar ao carrinho"
+    # em /p/<slug>, as ações do /carrinho) postam o id da action no corpo, sem o cabeçalho
+    # Next-Action. A loja não tem route handler, então todo POST restante é de action e entra
+    # num limite próprio por IP de cliente (storefront-post-ratelimit).
     storefront-forms:
       rule: "Host(`katoshop.localhost`) && Method(`POST`)"
       entryPoints: [web]
-      middlewares: [auth-ratelimit]
+      middlewares: [storefront-post-ratelimit]
       service: storefront
       priority: 150
 
@@ -156,6 +157,17 @@ http:
     # de login/cadastro das apps: 10 req/s em média, rajada de 20, por IP de origem. O Traefik
     # instancia o balde por router.
     auth-ratelimit:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 0
+
+    # POST de formulário da loja sem JavaScript (router storefront-forms): mesmos parâmetros do
+    # auth-ratelimit, num middleware próprio para ser ajustado sem mexer no limite do login.
+    storefront-post-ratelimit:
       rateLimit:
         average: 10
         burst: 20

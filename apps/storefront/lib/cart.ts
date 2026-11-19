@@ -79,13 +79,6 @@ async function guestCartId(): Promise<string | undefined> {
   return isGuestCartId(value) ? value : undefined;
 }
 
-/** Cabeçalhos de identidade para o cart: Bearer com sessão, senão o `X-Cart-Id` do cookie. */
-export async function cartHeaders(): Promise<HeadersInit> {
-  const token = await session.getAccessToken();
-  if (token !== null) return bearer(token);
-  return guestHeaders(await guestCartId());
-}
-
 function emptyCart(unavailable: boolean): CartView {
   return {
     cart_id: null,

@@ -33,7 +33,7 @@ vi.mock("../lib/session", () => ({
   sessionOptions: () => ({ secure: true }),
 }));
 
-const { CART_COOKIE, CART_FLASH_COOKIE, cartCount, cartHeaders, getCart, mergeGuestCart } =
+const { CART_COOKIE, CART_FLASH_COOKIE, cartCount, getCart, mergeGuestCart, mutateCart } =
   await import("../lib/cart");
 
 const GUEST_ID = "3f1c2a4e-8b7d-4c1e-9a2b-5d6e7f8a9b0c";
@@ -73,32 +73,40 @@ beforeEach(() => {
   mocks.withAuth.mockImplementation((fn: (token: string) => Promise<unknown>) => fn("at"));
 });
 
-describe("cartHeaders", () => {
-  it("com sessão manda o Bearer e ignora o cookie de visitante", async () => {
-    mocks.getAccessToken.mockResolvedValue("at");
+describe("mutateCart", () => {
+  it("carrinho que sumiu (cart_id null para um cookie existente) apaga o ks_cart", async () => {
     mocks.jar.set(CART_COOKIE, { value: GUEST_ID });
+    const call = vi.fn().mockResolvedValue(ok(cartOut(null)));
 
-    await expect(cartHeaders()).resolves.toEqual({ Authorization: "Bearer at" });
-  });
+    await mutateCart(call);
 
-  it("sem sessão manda o X-Cart-Id do cookie", async () => {
-    mocks.jar.set(CART_COOKIE, { value: GUEST_ID });
-
-    await expect(cartHeaders()).resolves.toEqual({ "X-Cart-Id": GUEST_ID });
-  });
-
-  it("sem sessão e sem cookie não manda nada", async () => {
-    await expect(cartHeaders()).resolves.toEqual({});
+    expect(call).toHaveBeenCalledWith({ "X-Cart-Id": GUEST_ID }, expect.any(AbortSignal));
+    expect(mocks.jar.has(CART_COOKIE)).toBe(false);
   });
 
   it.each(["nao-e-uuid", ACCOUNT_ID, GUEST_ID.toUpperCase(), `${GUEST_ID}x`])(
     "cookie fora do formato de UUIDv4 (%s) não é enviado",
     async (value) => {
       mocks.jar.set(CART_COOKIE, { value });
+      const call = vi.fn().mockResolvedValue(ok(cartOut(null)));
 
-      await expect(cartHeaders()).resolves.toEqual({});
+      await mutateCart(call);
+
+      expect(call).toHaveBeenCalledWith({}, expect.any(AbortSignal));
     },
   );
+
+  it("só com o ks_rt é cliente: withAuth com refresh, sem X-Cart-Id de visitante", async () => {
+    mocks.getRefreshToken.mockResolvedValue("rt");
+    mocks.jar.set(CART_COOKIE, { value: GUEST_ID });
+    const call = vi.fn().mockResolvedValue(ok(cartOut(ACCOUNT_ID)));
+
+    await mutateCart(call);
+
+    expect(mocks.withAuth).toHaveBeenCalledWith(expect.any(Function), { refresh: true });
+    expect(call).toHaveBeenCalledWith({ Authorization: "Bearer at" }, expect.any(AbortSignal));
+    expect(mocks.jar.get(CART_COOKIE)).toEqual({ value: GUEST_ID });
+  });
 });
 
 describe("getCart", () => {

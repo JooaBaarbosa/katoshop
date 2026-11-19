@@ -34,6 +34,8 @@ export const MESSAGES = {
   cross_fields:
     "O servidor recusou a combinação de tipo, valor e datas. Confira esses campos e tente de novo.",
   money_hint: "Use vírgula para os centavos, sem ponto de milhar.",
+  min_order_hint:
+    "Conta só os itens que valem para o cupom. Use vírgula para os centavos, sem ponto de milhar.",
   ends_after: "O fim deve ser depois do início.",
   count: "Use um número inteiro a partir de 1, ou deixe vazio.",
   description: "A descrição aceita no máximo 500 caracteres.",

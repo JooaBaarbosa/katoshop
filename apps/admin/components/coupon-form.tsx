@@ -204,7 +204,7 @@ export function CouponForm({
             label="Pedido mínimo (R$)"
             inputMode="decimal"
             placeholder="Vazio: sem mínimo"
-            hint={MESSAGES.money_hint}
+            hint={MESSAGES.min_order_hint}
             defaultValue={
               coupon?.min_order_cents != null ? formatCentsInput(coupon.min_order_cents) : undefined
             }

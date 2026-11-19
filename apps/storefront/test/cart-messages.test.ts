@@ -60,9 +60,10 @@ describe("messageForCoupon", () => {
     expect(messageForCoupon(reason)).toBe(message);
   });
 
-  it("min_order_not_met mostra o mínimo em BRL", () => {
+  it("min_order_not_met mostra o mínimo em BRL, contado só nos itens válidos", () => {
+    // O cart não expõe as restrições do cupom: a frase vale com e sem restrição.
     expect(plain(messageForCoupon("promotions.coupon.min_order_not_met", 20000))).toBe(
-      "Pedido mínimo de R$ 200,00 para este cupom.",
+      "Pedido mínimo de R$ 200,00 em itens válidos para este cupom.",
     );
   });
 

@@ -36,14 +36,18 @@ const COUPON_MESSAGES: Record<string, string> = {
   "promotions.unavailable": COUPON_UNAVAILABLE,
 };
 
-/** Texto pt-BR do motivo de um cupom recusado; `minOrderCents` para o pedido mínimo. */
+/**
+ * Texto pt-BR do motivo de um cupom recusado; `minOrderCents` para o pedido mínimo.
+ * O mínimo conta só os itens elegíveis do cupom (categorias e coleções), e o cart não diz se o
+ * cupom tem restrição, então a frase fala sempre em "itens válidos".
+ */
 export function messageForCoupon(
   reason: string | null | undefined,
   minOrderCents?: number | null,
 ): string {
   if (reason === "promotions.coupon.min_order_not_met") {
     return typeof minOrderCents === "number"
-      ? `Pedido mínimo de ${formatBRL(minOrderCents)} para este cupom.`
+      ? `Pedido mínimo de ${formatBRL(minOrderCents)} em itens válidos para este cupom.`
       : "Este cupom pede um valor mínimo de pedido.";
   }
   return (reason && COUPON_MESSAGES[reason]) || COUPON_FALLBACK;

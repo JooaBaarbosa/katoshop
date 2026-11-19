@@ -134,7 +134,9 @@ describe("applyCouponAction", () => {
     const state = await actions.applyCouponAction(null, form({ code: " bemvindo10 " }));
 
     expect(state).toMatchObject({ ok: false, code: "bemvindo10" });
-    expect(plain(state?.message ?? "")).toBe("Pedido mínimo de R$ 200,00 para este cupom.");
+    expect(plain(state?.message ?? "")).toBe(
+      "Pedido mínimo de R$ 200,00 em itens válidos para este cupom.",
+    );
     expect(mocks.cartPut).toHaveBeenCalledWith(
       "/v1/cart/coupon",
       expect.objectContaining({ body: { code: "bemvindo10" }, headers: { "X-Cart-Id": GUEST_ID } }),
@@ -653,7 +655,7 @@ describe("página /carrinho", () => {
     const html = await renderPage();
 
     expect(html).toContain("BEMVINDO10");
-    expect(html).toContain("Pedido mínimo de R$ 500,00 para este cupom.");
+    expect(html).toContain("Pedido mínimo de R$ 500,00 em itens válidos para este cupom.");
     expect(html).toContain("Remover cupom");
   });
 

@@ -4,6 +4,7 @@ import {
   couponValueLabel,
   flashMessage,
   isCouponId,
+  MESSAGES,
   localToUtc,
   normalizeCouponCode,
   onlyKnown,
@@ -354,5 +355,13 @@ describe("exibição", () => {
     expect(flashMessage("excluido")).toBe("Cupom excluído.");
     expect(flashMessage("<script>")).toBeNull();
     expect(flashMessage(undefined)).toBeNull();
+  });
+});
+
+describe("dicas do formulário", () => {
+  it("pedido mínimo explica que só os itens válidos contam", () => {
+    expect(MESSAGES.min_order_hint).toBe(
+      "Conta só os itens que valem para o cupom. Use vírgula para os centavos, sem ponto de milhar.",
+    );
   });
 });

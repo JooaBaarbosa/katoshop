@@ -20,6 +20,7 @@ NO_ELIGIBLE_ITEMS = "promotions.coupon.no_eligible_items"
 _COUPON_RE = re.compile(r"^[A-Z0-9-]{3,32}$")
 _GUEST_PREFIX = "guest:"
 _USER_PREFIX = "user:"
+_UUID_TEXT_LENGTH = 36
 
 
 def normalize_coupon_code(raw: str) -> str:
@@ -38,6 +39,8 @@ def parse_guest_cart_id(value: str) -> str | None:
     válido mas não v4 (ex.: o UUIDv7 de um carrinho de cliente) nunca é de visitante: `None`,
     tratado como carrinho inexistente.
     """
+    if len(value) != _UUID_TEXT_LENGTH:
+        raise CartError("cart.cart.invalid_id", status=422)
     try:
         parsed = uuid.UUID(value)
     except ValueError as exc:
@@ -269,23 +272,25 @@ class CartService:
         if guest is None:
             return await self._render(account), MergeResult()
         limits = {"max_lines": self._max_lines, "max_qty": self._max_qty}
-        coupon = guest.coupon_code
-        if coupon:
+        evaluated = guest.coupon_code
+        keep_coupon = False
+        if evaluated:
             preview = deepcopy(account)
             merge(preview, deepcopy(guest), **limits)
-            preview.coupon_code = coupon
-            result = await self._evaluate(preview, coupon)
+            preview.coupon_code = evaluated
+            result = await self._evaluate(preview, evaluated)
             if result.reason == PROMOTIONS_UNAVAILABLE:
                 # Sem como validar agora: não troca um cupom da conta por um não verificado.
-                coupon = coupon if account.coupon_code is None else None
-            elif not result.valid:
-                coupon = None
+                keep_coupon = account.coupon_code is None
+            else:
+                keep_coupon = result.valid
 
-        def combine(cart: Cart) -> MergeResult:
-            incoming = deepcopy(guest)  # merge altera os itens recebidos; cada tentativa copia
-            incoming.coupon_code = coupon
+        def combine(cart: Cart, current_guest: Cart) -> MergeResult:
+            incoming = deepcopy(current_guest)  # merge altera os itens recebidos
+            # Cupom do visitante trocado depois da avaliação: não foi validado, fica o da conta.
+            if not (keep_coupon and incoming.coupon_code == evaluated):
+                incoming.coupon_code = None
             return merge(cart, incoming, **limits)
 
-        report = await self._repo.mutate(account.cart_id, combine)
-        await self._repo.delete(guest.cart_id)
-        return await self._reload(account.cart_id), report
+        report = await self._repo.merge_guest(account.cart_id, guest.cart_id, combine)
+        return await self._reload(account.cart_id), report or MergeResult()

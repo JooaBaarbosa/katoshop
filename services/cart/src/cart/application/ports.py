@@ -25,6 +25,15 @@ class CartRepository(Protocol):
         self, cart_id: str, fn: Callable[[Cart], T], *, renew_ttl: bool = True
     ) -> T: ...
 
+    async def merge_guest[T](
+        self, account_id: str, guest_id: str, fn: Callable[[Cart, Cart], T]
+    ) -> T | None:
+        """Aplica `fn(conta, visitante)` e apaga o visitante numa transação só (WATCH nos dois).
+
+        Visitante inexistente ou que não é `guest:` não muda nada e devolve `None`.
+        """
+        ...
+
     async def delete(self, cart_id: str) -> None: ...
 
     async def carts_for_variant(self, variant_id: str) -> set[str]: ...

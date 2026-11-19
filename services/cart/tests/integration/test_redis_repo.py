@@ -405,3 +405,130 @@ def test_item_json_ignores_unknown_and_defaults_missing_optional_keys() -> None:
     )
 
     assert item_from_json(raw) == item
+
+
+# ------------------------------------------------------------------------------ merge_guest
+
+
+def take_guest(account: Cart, guest: Cart) -> list[str]:
+    """fn de merge mínimo: soma as quantidades do visitante na conta."""
+    for vid, item in guest.items.items():
+        current = account.items.get(vid)
+        quantity = item.quantity + (current.quantity if current else 0)
+        account.items[vid] = replace(item, quantity=quantity)
+    return sorted(guest.items)
+
+
+async def _guest_with(repo: RedisCartRepository, item: CartItem) -> Cart:
+    guest = await repo.new_guest()
+    await repo.mutate(guest.cart_id, put(item))
+    return guest
+
+
+async def test_merge_guest_writes_account_and_deletes_guest(
+    repo: RedisCartRepository, redis: Redis
+) -> None:
+    account = await repo.cart_for_user(str(uuid.uuid7()))
+    item = make_item(quantity=2)
+    guest = await _guest_with(repo, item)
+
+    result = await repo.merge_guest(account.cart_id, guest.cart_id, take_guest)
+
+    assert result == [item.variant_id]
+    stored = await repo.get(account.cart_id)
+    assert stored is not None
+    assert stored.items[item.variant_id].quantity == 2
+    assert stored.version == account.version + 1
+    assert await repo.get(guest.cart_id) is None
+    assert await redis.exists(f"cart:{guest.cart_id}:items") == 0
+    assert await repo.carts_for_variant(item.variant_id) == {account.cart_id}
+
+
+async def test_merge_guest_missing_or_user_guest_is_noop(repo: RedisCartRepository) -> None:
+    account = await repo.cart_for_user(str(uuid.uuid7()))
+    other = await repo.cart_for_user(str(uuid.uuid7()))
+    await repo.mutate(other.cart_id, put(make_item()))
+
+    assert await repo.merge_guest(account.cart_id, str(uuid.uuid4()), take_guest) is None
+    assert await repo.merge_guest(account.cart_id, other.cart_id, take_guest) is None
+    assert await repo.get(other.cart_id) is not None
+    stored = await repo.get(account.cart_id)
+    assert stored is not None
+    assert (stored.items, stored.version) == ({}, account.version)
+
+
+async def test_merge_guest_deletes_guest_when_account_unchanged(
+    repo: RedisCartRepository,
+) -> None:
+    account = await repo.cart_for_user(str(uuid.uuid7()))
+    guest = await repo.new_guest()
+
+    assert await repo.merge_guest(account.cart_id, guest.cart_id, take_guest) == []
+    assert await repo.get(guest.cart_id) is None
+    stored = await repo.get(account.cart_id)
+    assert stored is not None
+    assert stored.version == account.version
+
+
+async def test_concurrent_merges_apply_guest_once(repo: RedisCartRepository) -> None:
+    account = await repo.cart_for_user(str(uuid.uuid7()))
+    base = make_item(quantity=1)
+    await repo.mutate(account.cart_id, put(base))
+    guest = await _guest_with(repo, replace(base, quantity=2))
+
+    results = await asyncio.gather(
+        *(repo.merge_guest(account.cart_id, guest.cart_id, take_guest) for _ in range(5))
+    )
+
+    assert sum(r is not None for r in results) == 1
+    stored = await repo.get(account.cart_id)
+    assert stored is not None
+    assert stored.items[base.variant_id].quantity == 3
+    assert await repo.get(guest.cart_id) is None
+
+
+async def test_merge_guest_retries_when_guest_edited_concurrently(
+    repo: RedisCartRepository, redis: Redis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    account = await repo.cart_for_user(str(uuid.uuid7()))
+    first = make_item(quantity=1)
+    guest = await _guest_with(repo, first)
+    late = make_item(quantity=1)
+    guest_items = f"cart:{guest.cart_id}:items"
+    original = Pipeline.hgetall
+    injected = False
+
+    async def hgetall_with_guest_edit(self: Pipeline, name: str) -> object:
+        nonlocal injected
+        result = await original(self, name)  # pyright: ignore[reportGeneralTypeIssues]
+        if name == guest_items and not injected:
+            injected = True
+            # Outra aba do visitante inclui um item depois da leitura do merge.
+            await redis.hset(guest_items, late.variant_id, item_to_json(late))
+        return result
+
+    monkeypatch.setattr(Pipeline, "hgetall", hgetall_with_guest_edit)
+    calls = 0
+
+    def counting(account_cart: Cart, guest_cart: Cart) -> list[str]:
+        nonlocal calls
+        calls += 1
+        return take_guest(account_cart, guest_cart)
+
+    await repo.merge_guest(account.cart_id, guest.cart_id, counting)
+    monkeypatch.undo()
+
+    assert injected
+    assert calls == 2
+    stored = await repo.get(account.cart_id)
+    assert stored is not None
+    assert set(stored.items) == {first.variant_id, late.variant_id}
+    assert await repo.get(guest.cart_id) is None
+
+
+async def test_merge_guest_missing_account_is_404(repo: RedisCartRepository) -> None:
+    guest = await _guest_with(repo, make_item())
+    with pytest.raises(CartError) as err:
+        await repo.merge_guest(str(uuid.uuid7()), guest.cart_id, take_guest)
+    assert err.value.code == "cart.cart.not_found"
+    assert await repo.get(guest.cart_id) is not None

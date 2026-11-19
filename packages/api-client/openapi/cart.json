@@ -247,7 +247,6 @@
         "additionalProperties": false,
         "properties": {
           "guest_cart_id": {
-            "maxLength": 64,
             "title": "Guest Cart Id",
             "type": "string"
           }
@@ -518,7 +517,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 64,
                   "type": "string"
                 },
                 {
@@ -568,7 +566,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 64,
                   "type": "string"
                 },
                 {
@@ -616,7 +613,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 64,
                   "type": "string"
                 },
                 {
@@ -676,7 +672,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 64,
                   "type": "string"
                 },
                 {
@@ -736,7 +731,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 64,
                   "type": "string"
                 },
                 {
@@ -796,7 +790,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 64,
                   "type": "string"
                 },
                 {
@@ -854,7 +847,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 64,
                   "type": "string"
                 },
                 {
@@ -955,7 +947,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 64,
                   "type": "string"
                 },
                 {

@@ -23,6 +23,7 @@ import json
 import random
 import uuid
 from collections.abc import Awaitable, Callable, Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -154,6 +155,51 @@ def _build_cart(cart_id: str, header: dict[Any, Any], raw_items: dict[Any, Any])
     )
 
 
+def _owner(header: dict[Any, Any]) -> str:
+    """`owner` de um cabeçalho lido do Redis; vazio se o carrinho não existe."""
+    for key, value in header.items():
+        if _text(key) == "owner":
+            return _text(value)
+    return ""
+
+
+@dataclass(frozen=True)
+class _Change:
+    """O que gravar: itens novos ou alterados, removidos, adicionados e o cupom final."""
+
+    version: int
+    changed: dict[FieldT, EncodableT]
+    removed: set[str]
+    added: set[str]
+    coupon_code: str | None
+
+
+@dataclass(frozen=True)
+class _Snapshot:
+    """Estado lido antes de `fn`, para gravar só a diferença."""
+
+    owner: str
+    version: int
+    coupon_code: str | None
+    items: dict[str, str]
+
+    @classmethod
+    def of(cls, cart: Cart) -> _Snapshot:
+        items = {vid: item_to_json(item) for vid, item in cart.items.items()}
+        return cls(cart.owner, cart.version, cart.coupon_code, items)
+
+    def diff(self, cart: Cart) -> _Change | None:
+        after = {vid: item_to_json(item) for vid, item in cart.items.items()}
+        changed: dict[FieldT, EncodableT] = {
+            vid: raw for vid, raw in after.items() if self.items.get(vid) != raw
+        }
+        removed = set(self.items.keys() - after.keys())
+        if not changed and not removed and cart.coupon_code == self.coupon_code:
+            return None
+        added = set(after.keys() - self.items.keys())
+        return _Change(self.version, changed, removed, added, cart.coupon_code)
+
+
 def _new_header(owner: str) -> dict[FieldT, EncodableT]:
     now = _now()
     return {"owner": owner, "version": 0, "created_at": now, "updated_at": now}
@@ -247,50 +293,102 @@ class RedisCartRepository:
             if not header:
                 raise CartError("cart.cart.not_found", status=404)
             cart = _build_cart(cart_id, header, await pipe.hgetall(items_key))
-            version, owner, coupon = cart.version, cart.owner, cart.coupon_code
-            before = {vid: item_to_json(item) for vid, item in cart.items.items()}
+            snapshot = _Snapshot.of(cart)
             result = fn(cart)
-            after = {vid: item_to_json(item) for vid, item in cart.items.items()}
-            changed: dict[FieldT, EncodableT] = {
-                vid: raw for vid, raw in after.items() if before.get(vid) != raw
-            }
-            removed = before.keys() - after.keys()
-            added = after.keys() - before.keys()
-            if not changed and not removed and cart.coupon_code == coupon:
+            change = snapshot.diff(cart)
+            if change is None:
                 # EXEC vazio: as duas leituras não são um snapshot; se algo mudou sob o WATCH,
                 # WatchError faz a leitura de novo e `fn` não devolve estado rasgado.
                 pipe.multi()
                 await pipe.execute()
                 return result
-            guest = owner.startswith("guest:")
+            guest = snapshot.owner.startswith("guest:")
             # Sem renovar: as duas chaves seguem o prazo restante do cabeçalho (a de itens pode
             # nascer agora, sem TTL).
             remaining_ms = await pipe.pttl(header_key) if guest and not renew_ttl else None
-
             pipe.multi()
-            if changed:
-                pipe.hset(items_key, mapping=changed)
-            if removed:
-                pipe.hdel(items_key, *removed)
-            pipe.hset(header_key, mapping={"version": version + 1, "updated_at": _now()})
-            if cart.coupon_code is None:
-                pipe.hdel(header_key, "coupon_code")
-            else:
-                pipe.hset(header_key, "coupon_code", cart.coupon_code)
-            for vid in added:
-                pipe.sadd(_variant_key(vid), cart_id)
-            for vid in removed:
-                pipe.srem(_variant_key(vid), cart_id)
-            if guest and renew_ttl:
-                pipe.expire(header_key, self._guest_ttl_s)
-                pipe.expire(items_key, self._guest_ttl_s)
-            elif remaining_ms is not None and remaining_ms > 0:
-                pipe.pexpire(header_key, remaining_ms)
-                pipe.pexpire(items_key, remaining_ms)
+            self._stage(pipe, cart_id, change, guest=guest, remaining_ms=remaining_ms)
             await pipe.execute()
             return result
 
         return await self._optimistic((header_key, items_key), body)
+
+    def _stage(
+        self,
+        pipe: Pipeline,
+        cart_id: str,
+        change: _Change,
+        *,
+        guest: bool,
+        remaining_ms: int | None,
+    ) -> None:
+        """Enfileira (já em MULTI) a gravação de `change`; `remaining_ms` mantém o TTL."""
+        header_key, items_key = _cart_key(cart_id), _items_key(cart_id)
+        if change.changed:
+            pipe.hset(items_key, mapping=change.changed)
+        if change.removed:
+            pipe.hdel(items_key, *change.removed)
+        pipe.hset(header_key, mapping={"version": change.version + 1, "updated_at": _now()})
+        if change.coupon_code is None:
+            pipe.hdel(header_key, "coupon_code")
+        else:
+            pipe.hset(header_key, "coupon_code", change.coupon_code)
+        for vid in change.added:
+            pipe.sadd(_variant_key(vid), cart_id)
+        for vid in change.removed:
+            pipe.srem(_variant_key(vid), cart_id)
+        if guest and remaining_ms is None:
+            pipe.expire(header_key, self._guest_ttl_s)
+            pipe.expire(items_key, self._guest_ttl_s)
+        elif remaining_ms is not None and remaining_ms > 0:
+            pipe.pexpire(header_key, remaining_ms)
+            pipe.pexpire(items_key, remaining_ms)
+
+    async def merge_guest[T](
+        self, account_id: str, guest_id: str, fn: Callable[[Cart, Cart], T]
+    ) -> T | None:
+        """Une o visitante na conta e apaga o visitante, numa única transação.
+
+        WATCH nas quatro chaves (cabeçalho e itens dos dois carrinhos): uma edição do visitante
+        ou outro merge no meio faz a leitura de novo. Se o visitante já não existe (outro merge
+        venceu, expirou) ou não é de visitante, nada muda e devolve `None`. `fn(conta,
+        visitante)` altera só a conta e pode rodar mais de uma vez. O visitante é apagado
+        mesmo quando a conta não muda.
+        """
+        a_header, a_items = _cart_key(account_id), _items_key(account_id)
+        g_header, g_items = _cart_key(guest_id), _items_key(guest_id)
+
+        async def body(pipe: Pipeline) -> T | None:
+            account_fields = await pipe.hgetall(a_header)
+            if not account_fields:
+                raise CartError("cart.cart.not_found", status=404)
+            guest_fields = await pipe.hgetall(g_header)
+            guest_raw = await pipe.hgetall(g_items)
+            account = _build_cart(account_id, account_fields, await pipe.hgetall(a_items))
+            if not _owner(guest_fields).startswith("guest:"):
+                pipe.multi()
+                await pipe.execute()  # EXEC vazio valida o WATCH
+                return None
+            guest = _build_cart(guest_id, guest_fields, guest_raw)
+            snapshot = _Snapshot.of(account)
+            result = fn(account, guest)
+            change = snapshot.diff(account)
+            pipe.multi()
+            if change is not None:
+                self._stage(
+                    pipe,
+                    account_id,
+                    change,
+                    guest=snapshot.owner.startswith("guest:"),
+                    remaining_ms=None,
+                )
+            pipe.delete(g_header, g_items)
+            for vid in guest.items:
+                pipe.srem(_variant_key(vid), guest_id)
+            await pipe.execute()
+            return result
+
+        return await self._optimistic((a_header, a_items, g_header, g_items), body)
 
     async def delete(self, cart_id: str) -> None:
         """Apaga cabeçalho, itens, as entradas do índice reverso e o ponteiro do cliente."""

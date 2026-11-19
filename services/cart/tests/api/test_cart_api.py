@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager
@@ -707,3 +708,122 @@ async def test_merge_drops_guest_coupon_invalid_for_account(
     resp = await api.post("/v1/cart/merge", json={"guest_cart_id": guest_cart}, headers=customer)
     assert resp.json()["coupon"]["code"] == "MIN500"
     assert resp.json()["coupon"]["valid"] is True
+
+
+# ------------------------------------------------------------------ fix round 1
+
+
+async def test_concurrent_merges_add_guest_once(
+    api: httpx.AsyncClient, customer: dict[str, str], redis: Redis
+) -> None:
+    await add(api, V1, 1, customer)
+    guest_cart = await new_guest_cart(api, V1, 2)
+    responses = await asyncio.gather(
+        *(
+            api.post("/v1/cart/merge", json={"guest_cart_id": guest_cart}, headers=customer)
+            for _ in range(4)
+        )
+    )
+    assert all(r.status_code == 200 for r in responses)
+    mine = (await api.get("/v1/cart", headers=customer)).json()
+    assert item(mine, V1)["quantity"] == 3
+    assert await redis.exists(f"cart:{guest_cart}") == 0
+
+
+async def test_merge_deletes_empty_guest_cart(
+    api: httpx.AsyncClient, customer: dict[str, str], redis: Redis
+) -> None:
+    guest_cart = await new_guest_cart(api, V1, 1)
+    await api.delete(f"/v1/cart/items/{V1}", headers=guest(guest_cart))
+    assert await redis.exists(f"cart:{guest_cart}") == 1
+    resp = await api.post("/v1/cart/merge", json={"guest_cart_id": guest_cart}, headers=customer)
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
+    assert await redis.exists(f"cart:{guest_cart}") == 0
+
+
+async def test_merge_promotions_down_keeps_account_coupon(
+    api: httpx.AsyncClient,
+    customer: dict[str, str],
+    promotions: FakePromotions,
+    redis: Redis,
+) -> None:
+    await add(api, V1, 1, customer)
+    await api.put("/v1/cart/coupon", json={"code": "BEMVINDO10"}, headers=customer)
+    guest_cart = await new_guest_cart(api, V2, 1)
+    await redis.hset(f"cart:{guest_cart}", "coupon_code", "MIN500")
+    promotions.down = True
+    resp = await api.post("/v1/cart/merge", json={"guest_cart_id": guest_cart}, headers=customer)
+    assert resp.status_code == 200
+    assert resp.json()["coupon"]["code"] == "BEMVINDO10"
+    assert resp.json()["coupon"]["reason"] == "promotions.unavailable"
+
+
+async def test_merge_promotions_down_keeps_guest_coupon_when_account_has_none(
+    api: httpx.AsyncClient, customer: dict[str, str], promotions: FakePromotions
+) -> None:
+    await add(api, V1, 1, customer)
+    guest_cart = await new_guest_cart(api, V2, 1)
+    await api.put("/v1/cart/coupon", json={"code": "BEMVINDO10"}, headers=guest(guest_cart))
+    promotions.down = True
+    resp = await api.post("/v1/cart/merge", json={"guest_cart_id": guest_cart}, headers=customer)
+    assert resp.json()["coupon"]["code"] == "BEMVINDO10"
+    assert resp.json()["discount_cents"] == 0
+
+
+async def test_token_ignores_cart_id_header_on_mutation(
+    api: httpx.AsyncClient, customer: dict[str, str]
+) -> None:
+    guest_cart = await new_guest_cart(api, V1, 1)
+    resp = await add(api, V2, 2, {**customer, **guest(guest_cart)})
+    assert resp.json()["cart_id"] != guest_cart
+    assert [i["variant_id"] for i in resp.json()["items"]] == [V2]
+    untouched = (await api.get("/v1/cart", headers=guest(guest_cart))).json()
+    assert [i["variant_id"] for i in untouched["items"]] == [V1]
+
+
+async def test_overlong_cart_ids_are_invalid_id(
+    api: httpx.AsyncClient, customer: dict[str, str]
+) -> None:
+    long_id = str(uuid.uuid4()) + "0" * 100
+    resp = await api.get("/v1/cart", headers=guest(long_id))
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "cart.cart.invalid_id"
+    resp = await api.post("/v1/cart/merge", json={"guest_cart_id": long_id}, headers=customer)
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "cart.cart.invalid_id"
+
+
+async def test_unknown_cart_error_code_is_500(
+    api: httpx.AsyncClient, catalog: FakeCatalog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def broken(_variant_id: str) -> CartItem | None:
+        raise CartError("cart.nobody.knows")
+
+    monkeypatch.setattr(catalog, "variant", broken)
+    resp = await add(api, V1, 1)
+    assert resp.status_code == 500
+    assert resp.json()["code"] == "internal.error"
+
+
+async def test_redis_down_is_503_storage_unavailable(
+    signer: Signer,
+    catalog: FakeCatalog,
+    promotions: FakePromotions,
+    asgi_client_factory: Callable[[FastAPI], AbstractAsyncContextManager[httpx.AsyncClient]],
+) -> None:
+    settings = CartSettings(redis_url="redis://127.0.0.1:1/0", client_secret="x")  # noqa: S106
+    app = create_app(settings, catalog=catalog, promotions=promotions)
+    async with asgi_client_factory(app) as http_client:
+        resp = await http_client.get("/v1/cart", headers=guest(str(uuid.uuid4())))
+        assert resp.status_code == 503
+        assert resp.json()["code"] == "cart.storage.unavailable"
+        resp = await add(http_client, V1, 1)
+        assert resp.status_code == 503
+        assert resp.json()["code"] == "cart.storage.unavailable"
+
+
+def test_unstarted_app_creates_no_upstream_clients() -> None:
+    app = create_app(CartSettings(client_secret="x"))  # noqa: S106
+    for name in ("redis", "catalog", "promotions"):
+        assert not hasattr(app.state, name), name

@@ -25,7 +25,7 @@ async def optional_storefront_principal(request: Request) -> Principal | None:
 
 async def identity(
     principal: Annotated[Principal | None, Depends(optional_storefront_principal)],
-    x_cart_id: Annotated[str | None, Header(max_length=64)] = None,
+    x_cart_id: Annotated[str | None, Header()] = None,
 ) -> Identity:
     # Com token, o X-Cart-Id é ignorado: unir o carrinho do visitante é explícito (merge).
     if principal is not None:

@@ -26,7 +26,8 @@ class CouponIn(_In):
 
 
 class MergeIn(_In):
-    guest_cart_id: str = Field(max_length=64)
+    # Sem max_length: tamanho errado também é `cart.cart.invalid_id` (Ruling S8).
+    guest_cart_id: str
 
 
 class NoticeOut(BaseModel):

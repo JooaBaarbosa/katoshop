@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   catalog: vi.fn(),
   catalogGet: vi.fn(),
   promotions: vi.fn(),
+  promoGet: vi.fn(),
   post: vi.fn(),
   patch: vi.fn(),
   del: vi.fn(),
@@ -68,7 +69,8 @@ async function redirectOf(promise: Promise<unknown>): Promise<string> {
     () => null,
     (e: unknown) => e,
   );
-  if (!(error instanceof RedirectSignal)) throw new Error(`esperava redirect, veio ${String(error)}`);
+  if (!(error instanceof RedirectSignal))
+    throw new Error(`esperava redirect, veio ${String(error)}`);
   return error.url;
 }
 
@@ -77,7 +79,7 @@ const CREATE_FIELDS = {
   description: "Primeira compra",
   kind: "percent",
   value: "10",
-  category_slugs: ["camisetas", "sumiu"],
+  category_slugs: ["camisetas", "camisetas"],
   collection_slugs: ["verao"],
   active: "on",
 };
@@ -104,12 +106,49 @@ beforeEach(() => {
         : ok({ items: [{ slug: "verao" }] }),
     ),
   );
-  mocks.promotions.mockReturnValue({ POST: mocks.post, PATCH: mocks.patch, DELETE: mocks.del });
+  mocks.promotions.mockReturnValue({
+    GET: mocks.promoGet,
+    POST: mocks.post,
+    PATCH: mocks.patch,
+    DELETE: mocks.del,
+  });
   mocks.withAuth.mockImplementation((fn: (token: string) => Promise<unknown>) => fn("at"));
 });
 
 describe("createCouponAction", () => {
-  it("envia o corpo normalizado, só com slugs do catálogo, e volta à lista com aviso", async () => {
+  it("slug que sumiu do catálogo vira erro no campo e não cria nada", async () => {
+    const state = await actions.createCouponAction(
+      null,
+      form({ ...CREATE_FIELDS, category_slugs: ["camisetas", "sumiu"] }),
+    );
+
+    expect(state).toEqual({
+      ok: false,
+      fieldErrors: { category_slugs: "Escolha categorias da lista." },
+    });
+    expect(mocks.post).not.toHaveBeenCalled();
+  });
+
+  it("422 de regra entre campos (raiz do corpo) explica no topo do formulário", async () => {
+    mocks.post.mockResolvedValue(
+      problem(422, {
+        code: "request.validation",
+        title: "Requisição inválida",
+        errors: { body: ["Value error, Percentual deve ficar entre 1 e 90"] },
+      }),
+    );
+
+    const state = await actions.createCouponAction(null, form(CREATE_FIELDS));
+
+    expect(state).toEqual({
+      ok: false,
+      code: "request.validation",
+      formError:
+        "O servidor recusou a combinação de tipo, valor e datas. Confira esses campos e tente de novo.",
+    });
+  });
+
+  it("envia o corpo normalizado, com slugs do catálogo, e volta à lista com aviso", async () => {
     mocks.post.mockResolvedValue(ok({ id: CID }, 201));
 
     const url = await redirectOf(actions.createCouponAction(null, form(CREATE_FIELDS)));
@@ -171,7 +210,8 @@ describe("createCouponAction", () => {
       formError: "Confira os campos destacados.",
       fieldErrors: {
         value: "Confira o valor: percentual inteiro de 1 a 90 ou valor fixo maior que zero.",
-        min_order: "Informe um valor em reais maior que zero, como 99,90, ou deixe vazio.",
+        min_order:
+          "Informe um valor em reais maior que zero, como 99,90, até R$ 100.000,00 (limite do painel), ou deixe vazio.",
         category_slugs: "Escolha categorias da lista.",
         ends_at: "O fim deve ser depois do início.",
       },
@@ -194,9 +234,7 @@ describe("createCouponAction", () => {
       new ApiProblem({ status: 401, code: "auth.invalid_token", message: "Token inválido" }),
     );
 
-    expect(await redirectOf(actions.createCouponAction(null, form(CREATE_FIELDS)))).toBe(
-      "/entrar",
-    );
+    expect(await redirectOf(actions.createCouponAction(null, form(CREATE_FIELDS)))).toBe("/entrar");
     expect(mocks.post).not.toHaveBeenCalled();
     expect(mocks.catalogGet).not.toHaveBeenCalled();
   });
@@ -251,6 +289,52 @@ describe("updateCouponAction", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith(`/cupons/${CID}`);
   });
 
+  it("slug salvo que sumiu do catálogo continua no cupom (não vira cupom da loja toda)", async () => {
+    mocks.promoGet.mockResolvedValue(
+      ok({ id: CID, category_slugs: ["antiga"], collection_slugs: [] }),
+    );
+    mocks.patch.mockResolvedValue(ok({ id: CID, version: 5 }));
+
+    await redirectOf(
+      actions.updateCouponAction(
+        null,
+        form({ ...UPDATE_FIELDS, category_slugs: ["antiga", "camisetas"] }),
+      ),
+    );
+
+    // o cupom salvo é lido no servidor (não confiamos em campo oculto)
+    expect(mocks.promoGet).toHaveBeenCalledWith("/v1/admin/coupons/{coupon_id}", {
+      params: { path: { coupon_id: CID } },
+    });
+    const [, init] = mocks.patch.mock.calls[0] as [string, { body: Record<string, unknown> }];
+    expect(init.body.category_slugs).toEqual(["antiga", "camisetas"]);
+  });
+
+  it("slug novo fora do catálogo na edição vira erro no campo e não grava", async () => {
+    mocks.promoGet.mockResolvedValue(
+      ok({ id: CID, category_slugs: ["antiga"], collection_slugs: [] }),
+    );
+
+    const state = await actions.updateCouponAction(
+      null,
+      form({ ...UPDATE_FIELDS, collection_slugs: ["inventada"] }),
+    );
+
+    expect(state).toEqual({
+      ok: false,
+      fieldErrors: { collection_slugs: "Escolha coleções da lista." },
+    });
+    expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
+  it("id que não é UUID não chama a API", async () => {
+    const state = await actions.updateCouponAction(null, form({ ...UPDATE_FIELDS, id: "../x" }));
+
+    expect(state).toEqual({ ok: false, formError: "Cupom não encontrado." });
+    expect(mocks.withAuth).not.toHaveBeenCalled();
+    expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
   it("409 de versão devolve o código e a mensagem para o botão Recarregar", async () => {
     mocks.patch.mockResolvedValue(
       problem(409, { code: "promotions.coupon.version_conflict", title: "Conflito" }),
@@ -261,8 +345,7 @@ describe("updateCouponAction", () => {
     expect(state).toMatchObject({
       ok: false,
       code: "promotions.coupon.version_conflict",
-      formError:
-        "Este cupom foi alterado por outra pessoa. Recarregue para ver a versão atual.",
+      formError: "Este cupom foi alterado por outra pessoa. Recarregue para ver a versão atual.",
     });
   });
 });
@@ -303,6 +386,14 @@ describe("ativar, desativar e excluir", () => {
       code: "promotions.coupon.has_redemptions",
       error: "Este cupom já foi usado e não pode ser excluído. Desative em vez disso.",
     });
+  });
+
+  it("id que não é UUID não chama a API", async () => {
+    const notFound = { ok: false, error: "Cupom não encontrado." };
+    expect(await actions.activateCouponAction("x")).toEqual(notFound);
+    expect(await actions.deactivateCouponAction("x")).toEqual(notFound);
+    expect(await actions.deleteCouponAction("x")).toEqual(notFound);
+    expect(mocks.withAuth).not.toHaveBeenCalled();
   });
 
   it("sem sessão de funcionário não chama a API", async () => {

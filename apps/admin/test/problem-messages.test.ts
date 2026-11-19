@@ -29,11 +29,14 @@ describe("messageFor", () => {
     expect(messageFor(code)).toBe(text);
   });
 
-  it.each(["no_active_variant", "no_image", "no_price"])("blocker %s tem texto em pt-BR", (code) => {
-    const text = messageFor(code);
-    expect(text).not.toContain("Algo deu errado");
-    expect(text.length).toBeGreaterThan(10);
-  });
+  it.each(["no_active_variant", "no_image", "no_price"])(
+    "blocker %s tem texto em pt-BR",
+    (code) => {
+      const text = messageFor(code);
+      expect(text).not.toContain("Algo deu errado");
+      expect(text.length).toBeGreaterThan(10);
+    },
+  );
 
   it("código desconhecido cai no fallback com o traceId", () => {
     expect(messageFor("catalog.nada.disso", "abc123")).toBe(

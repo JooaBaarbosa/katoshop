@@ -24,13 +24,18 @@ import {
 } from "../app/(painel)/cupons/actions";
 import type { ActionState } from "../lib/action-state";
 import { formatCentsInput } from "../lib/catalog-input";
-import { KIND_LABELS, utcToSaoPauloLocal, type Coupon } from "../lib/coupons";
+import {
+  KIND_LABELS,
+  MESSAGES,
+  slugOptions,
+  utcToSaoPauloLocal,
+  type Coupon,
+  type SlugOption,
+} from "../lib/coupons";
 import { FormError, FormField, TextareaField } from "./form-field";
 import { SelectField } from "./select-field";
 
 const CONFLICT = "promotions.coupon.version_conflict";
-
-export type SlugOption = { slug: string; name: string };
 
 type EditState = (ActionState & { submittedVersion?: number }) | null;
 
@@ -50,14 +55,16 @@ function SlugChecklist({
   error?: string | undefined;
 }) {
   const errorId = error ? `field-${name}-error` : undefined;
+  // slug salvo que sumiu do catálogo continua marcado; só sai do cupom se alguém desmarcar
+  const items = slugOptions(options, selected);
   return (
     <fieldset className="space-y-2" aria-describedby={errorId}>
       <legend className="text-sm font-medium">{legend}</legend>
-      {options.length === 0 ? (
+      {items.length === 0 ? (
         <p className="text-sm text-ks-muted">{empty}</p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
-          {options.map((option) => {
+          {items.map((option) => {
             const id = `field-${name}-${option.slug}`;
             return (
               <li key={option.slug} className="flex items-center gap-2">
@@ -103,16 +110,13 @@ export function CouponForm({
 }) {
   const router = useRouter();
   const [reloading, startReload] = useTransition();
-  const [state, action, pending] = useActionState<EditState, FormData>(
-    async (prev, formData) => {
-      const submittedVersion = Number(formData.get("version"));
-      const result = coupon
-        ? await updateCouponAction(prev, formData)
-        : await createCouponAction(prev, formData);
-      return result && { ...result, submittedVersion };
-    },
-    null,
-  );
+  const [state, action, pending] = useActionState<EditState, FormData>(async (prev, formData) => {
+    const submittedVersion = Number(formData.get("version"));
+    const result = coupon
+      ? await updateCouponAction(prev, formData)
+      : await createCouponAction(prev, formData);
+    return result && { ...result, submittedVersion };
+  }, null);
 
   const failed = state?.ok === false ? state : null;
   // depois de recarregar, a versão nova chega pelas props e o aviso some
@@ -159,7 +163,9 @@ export function CouponForm({
             <div className="space-y-2">
               <p className="text-sm font-medium">Código</p>
               <p className="flex h-10 items-center font-mono text-sm">{coupon.code}</p>
-              <p className="text-xs text-ks-muted">O código não pode ser alterado depois de criado.</p>
+              <p className="text-xs text-ks-muted">
+                O código não pode ser alterado depois de criado.
+              </p>
             </div>
           ) : (
             <FormField
@@ -189,7 +195,7 @@ export function CouponForm({
             required
             inputMode="decimal"
             placeholder="10"
-            hint="Percentual: inteiro de 1 a 90. Valor fixo: em reais, como 10,50."
+            hint={`Percentual: inteiro de 1 a 90. Valor fixo: em reais, como 10,50. ${MESSAGES.money_hint}`}
             defaultValue={coupon ? valueInput(coupon) : undefined}
             error={errors.value}
           />
@@ -198,6 +204,7 @@ export function CouponForm({
             label="Pedido mínimo (R$)"
             inputMode="decimal"
             placeholder="Vazio: sem mínimo"
+            hint={MESSAGES.money_hint}
             defaultValue={
               coupon?.min_order_cents != null ? formatCentsInput(coupon.min_order_cents) : undefined
             }
@@ -274,7 +281,9 @@ export function CouponForm({
             min={1}
             step={1}
             placeholder="Vazio: sem limite"
-            defaultValue={coupon?.max_uses_total != null ? String(coupon.max_uses_total) : undefined}
+            defaultValue={
+              coupon?.max_uses_total != null ? String(coupon.max_uses_total) : undefined
+            }
             error={errors.max_uses_total}
           />
           <FormField
@@ -317,11 +326,12 @@ export function CouponStatusToggle({ coupon }: { coupon: Coupon }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   return (
-    <div className="space-y-2">
+    <div className="max-w-56 space-y-2">
       <Button
         type="button"
         variant="secondary"
         disabled={pending}
+        aria-describedby="cupom-status-aviso"
         onClick={() =>
           startTransition(async () => {
             setError(null);
@@ -340,6 +350,9 @@ export function CouponStatusToggle({ coupon }: { coupon: Coupon }) {
         )}
         {pending ? "Salvando..." : coupon.active ? "Desativar" : "Ativar"}
       </Button>
+      <p id="cupom-status-aviso" className="text-xs text-ks-muted">
+        O formulário recarrega com os dados salvos. Salve as alterações antes.
+      </p>
       <FormError message={error ?? undefined} />
     </div>
   );

@@ -94,7 +94,10 @@ export function TextareaField({ name, label, hint, error, ...props }: TextareaFi
 export function FormNotice({ message }: { message?: string | undefined }) {
   if (!message) return null;
   return (
-    <p role="status" className="border border-green-700 bg-green-50 px-3 py-2 text-sm text-green-800">
+    <p
+      role="status"
+      className="border border-green-700 bg-green-50 px-3 py-2 text-sm text-green-800"
+    >
       {message}
     </p>
   );

@@ -1,10 +1,12 @@
 import { Badge } from "@katoshop/ui/badge";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { CouponForm, CouponStatusToggle, DeleteCoupon } from "../../../../components/coupon-form";
 import { PageHeader } from "../../../../components/page-header";
 import { listCategories, listCollections } from "../../../../lib/catalog-data";
 import { getCoupon } from "../../../../lib/coupon-data";
+import { isCouponId } from "../../../../lib/coupons";
 import { requireStaff } from "../../../../lib/guard";
 
 export const metadata: Metadata = { title: "Editar cupom" };
@@ -12,6 +14,8 @@ export const metadata: Metadata = { title: "Editar cupom" };
 export default async function CouponPage({ params }: { params: Promise<{ id: string }> }) {
   await requireStaff();
   const { id } = await params;
+  // id que não é UUID nem chega à API
+  if (!isCouponId(id)) notFound();
   const [coupon, categories, collections] = await Promise.all([
     getCoupon(id),
     listCategories(),

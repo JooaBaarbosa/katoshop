@@ -41,7 +41,7 @@ const MESSAGES: Record<string, string> = {
   "promotions.coupon.not_found": "Cupom não encontrado.",
   "promotions.pagination.invalid_cursor":
     "A página pedida não existe mais. Mostrando o início da lista.",
-  "request.validation":"Confira os campos destacados.",
+  "request.validation": "Confira os campos destacados.",
   "http.429": "Muitas ações seguidas. Aguarde um instante e tente de novo.",
   // blockers de publicação (errors.product do 422 catalog.product.not_publishable)
   no_active_variant: "Ative pelo menos uma variante de cor e tamanho.",

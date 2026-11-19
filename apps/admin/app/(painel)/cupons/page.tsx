@@ -1,4 +1,3 @@
-import { ApiProblem } from "@katoshop/api-client";
 import { Badge } from "@katoshop/ui/badge";
 import { Button } from "@katoshop/ui/button";
 import { Input } from "@katoshop/ui/input";
@@ -17,17 +16,18 @@ import Link from "next/link";
 import { FormNotice } from "../../../components/form-field";
 import { PageHeader } from "../../../components/page-header";
 import { SelectField } from "../../../components/select-field";
-import { INVALID_CURSOR, listCoupons, type CouponQuery } from "../../../lib/coupon-data";
+import { listCategories, listCollections } from "../../../lib/catalog-data";
+import { loadCouponList, type CouponQuery } from "../../../lib/coupon-data";
 import {
   couponConditions,
   couponValueLabel,
   flashMessage,
   KIND_LABELS,
   type Coupon,
+  type SlugNames,
 } from "../../../lib/coupons";
 import { requireStaff } from "../../../lib/guard";
 import { formatMovementDate } from "../../../lib/overview";
-import { messageFor } from "../../../lib/problem-messages";
 
 export const metadata: Metadata = { title: "Cupons" };
 
@@ -80,18 +80,16 @@ export default async function CouponsPage({
   const query = queryOf(params);
   const flash = flashMessage(one(params.aviso) || undefined);
 
-  let notice: string | null = null;
-  let page: Awaited<ReturnType<typeof listCoupons>>;
-  try {
-    page = await listCoupons(query);
-  } catch (error) {
-    // cursor adulterado ou vencido: mostra o início da lista com um aviso
-    if (!(error instanceof ApiProblem) || error.code !== INVALID_CURSOR || !query.cursor) {
-      throw error;
-    }
-    page = await listCoupons(queryOf({ ...params, cursor: undefined }));
-    notice = messageFor(INVALID_CURSOR);
-  }
+  const [{ page, notice }, categories, collections] = await Promise.all([
+    loadCouponList(query),
+    listCategories(),
+    listCollections(),
+  ]);
+  // condições com o nome do catálogo; slug que sumiu aparece marcado como removido
+  const names: SlugNames = {
+    categories: Object.fromEntries(categories.map((c) => [c.slug, c.name])),
+    collections: Object.fromEntries(collections.map((c) => [c.slug, c.name])),
+  };
   const onLaterPage = Boolean(query.cursor) && notice === null;
 
   return (
@@ -198,7 +196,7 @@ export default async function CouponsPage({
                   <TableCell className="text-sm tabular-nums">{validity(coupon)}</TableCell>
                   <TableCell>
                     <ul className="space-y-0.5 text-sm">
-                      {couponConditions(coupon).map((condition) => (
+                      {couponConditions(coupon, names).map((condition) => (
                         <li key={condition}>{condition}</li>
                       ))}
                     </ul>

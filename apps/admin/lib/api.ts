@@ -1,5 +1,9 @@
 import "server-only";
-import { createCatalogClient, createIdentityClient, createPromotionsClient } from "@katoshop/api-client";
+import {
+  createCatalogClient,
+  createIdentityClient,
+  createPromotionsClient,
+} from "@katoshop/api-client";
 import { apiUrl } from "./env";
 
 export function identity(accessToken?: string) {

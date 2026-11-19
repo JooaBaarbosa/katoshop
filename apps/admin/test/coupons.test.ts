@@ -3,11 +3,14 @@ import {
   couponConditions,
   couponValueLabel,
   flashMessage,
+  isCouponId,
+  localToUtc,
   normalizeCouponCode,
   onlyKnown,
   parseCouponForm,
   parseReaisCents,
   saoPauloLocalToUtc,
+  slugOptions,
   utcToSaoPauloLocal,
 } from "../lib/coupons";
 
@@ -40,12 +43,9 @@ describe("normalizeCouponCode", () => {
     expect(normalizeCouponCode("frete-gratis")).toBe("FRETE-GRATIS");
   });
 
-  it.each(["ab", "a".repeat(33), "PROMO 10", "PROMO_10", "PROMOÇÃO", "ﬀAB"])(
-    "recusa %s",
-    (raw) => {
-      expect(normalizeCouponCode(raw)).toBeNull();
-    },
-  );
+  it.each(["ab", "a".repeat(33), "PROMO 10", "PROMO_10", "PROMOÇÃO", "ﬀAB"])("recusa %s", (raw) => {
+    expect(normalizeCouponCode(raw)).toBeNull();
+  });
 });
 
 describe("parseReaisCents", () => {
@@ -83,6 +83,13 @@ describe("fuso America/Sao_Paulo", () => {
 
   it("usa o horário de verão quando o fuso o tinha (2018: UTC-2)", () => {
     expect(saoPauloLocalToUtc("2018-01-15T10:00")).toBe("2018-01-15T12:00:00.000Z");
+  });
+
+  it("recusa horário que não existiu (salto do horário de verão em 04/11/2018)", () => {
+    expect(saoPauloLocalToUtc("2018-11-04T00:30")).toBeNull();
+    expect(localToUtc("2018-11-04T00:30")).toEqual({ ok: false, reason: "gap" });
+    expect(localToUtc("2018-11-04T01:00")).toEqual({ ok: true, iso: "2018-11-04T03:00:00.000Z" });
+    expect(localToUtc("31/12/2026")).toEqual({ ok: false, reason: "invalid" });
   });
 
   it("aceita segundos e recusa datas impossíveis ou mal formadas", () => {
@@ -172,7 +179,8 @@ describe("parseCouponForm", () => {
     expect(bodyOf({ kind: "fixed", value: "10" }).value).toBe(1000);
     expect(bodyOf({ kind: "fixed", value: "10.50" }).value).toBe(1050);
     expect(errorsOf({ kind: "fixed", value: "-1" })).toEqual({
-      value: "Informe um valor em reais maior que zero, como 10,50, até R$ 100.000,00.",
+      value:
+        "Informe um valor em reais maior que zero, como 10,50, até R$ 100.000,00 (limite do painel).",
     });
     expect(errorsOf({ kind: "fixed", value: "1,999" })).toHaveProperty("value");
   });
@@ -180,7 +188,8 @@ describe("parseCouponForm", () => {
   it("pedido mínimo: reais opcional", () => {
     expect(bodyOf({ min_order: "99" }).min_order_cents).toBe(9900);
     expect(errorsOf({ min_order: "0" })).toEqual({
-      min_order: "Informe um valor em reais maior que zero, como 99,90, ou deixe vazio.",
+      min_order:
+        "Informe um valor em reais maior que zero, como 99,90, até R$ 100.000,00 (limite do painel), ou deixe vazio.",
     });
   });
 
@@ -215,18 +224,39 @@ describe("parseCouponForm", () => {
     });
   });
 
-  it("categorias e coleções: deduplicadas e só as carregadas do catálogo", () => {
+  it("categorias e coleções: deduplicadas e aceitas quando estão entre as permitidas", () => {
     const result = parseCouponForm(
       form({
         ...BASE,
-        category_slugs: ["camisetas", "inventada", "camisetas"],
-        collection_slugs: ["verao", "x"],
+        category_slugs: ["camisetas", "moletons", "camisetas"],
+        collection_slugs: ["verao"],
       }),
       { categories: ["camisetas", "moletons"], collections: ["verao"] },
     );
     expect(result).toMatchObject({
       ok: true,
-      body: { category_slugs: ["camisetas"], collection_slugs: ["verao"] },
+      body: { category_slugs: ["camisetas", "moletons"], collection_slugs: ["verao"] },
+    });
+  });
+
+  it("categorias e coleções fora das permitidas viram erro no campo, nunca somem", () => {
+    const result = parseCouponForm(
+      form({ ...BASE, category_slugs: ["camisetas", "inventada"], collection_slugs: ["x"] }),
+      { categories: ["camisetas"], collections: ["verao"] },
+    );
+    expect(result).toEqual({
+      ok: false,
+      fieldErrors: {
+        category_slugs: "Escolha categorias da lista.",
+        collection_slugs: "Escolha coleções da lista.",
+      },
+    });
+  });
+
+  it("horário que não existe (início do horário de verão de 2018) é recusado", () => {
+    expect(errorsOf({ starts_at: "2018-11-04T00:30" })).toEqual({
+      starts_at:
+        "Este horário não existe em Brasília por causa da mudança de horário. Escolha outro.",
     });
   });
 
@@ -284,6 +314,38 @@ describe("exibição", () => {
     expect(list[2]).toBe("Coleções: verao, basicos");
     expect(list[3]).toBe("Até 100 usos no total");
     expect(list[4]).toBe("1 uso por cliente");
+  });
+
+  it("condições usam o nome do catálogo quando existe, e o slug quando sumiu", () => {
+    const list = couponConditions(
+      {
+        min_order_cents: null,
+        category_slugs: ["camisetas", "antiga"],
+        collection_slugs: ["verao"],
+        max_uses_total: null,
+        max_uses_per_customer: null,
+      },
+      { categories: { camisetas: "Camisetas" }, collections: { verao: "Coleção Verão" } },
+    );
+    expect(list).toEqual([
+      "Categorias: Camisetas, antiga (removido do catálogo)",
+      "Coleções: Coleção Verão",
+    ]);
+  });
+
+  it("checkboxes incluem, marcados, os slugs salvos que sumiram do catálogo", () => {
+    expect(
+      slugOptions([{ slug: "camisetas", name: "Camisetas" }], ["antiga", "camisetas"]),
+    ).toEqual([
+      { slug: "camisetas", name: "Camisetas" },
+      { slug: "antiga", name: "antiga (removido do catálogo)" },
+    ]);
+  });
+
+  it("id de cupom precisa ser UUID", () => {
+    expect(isCouponId("0190a000-0000-7000-8000-0000000000c1")).toBe(true);
+    expect(isCouponId("../admin")).toBe(false);
+    expect(isCouponId("")).toBe(false);
   });
 
   it("aviso depois do redirect só aceita chaves conhecidas", () => {

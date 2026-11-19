@@ -425,17 +425,41 @@ describe("formulários da linha (o que o navegador envia)", () => {
     expect(await renderPage()).toMatch(/<output[^>]*aria-label="Quantidade"[^>]*>2<\/output>/);
   });
 
-  it("o erro volta com a versão da linha enviada, para sumir quando a linha muda", async () => {
-    const forms = await lineForms();
-    const fields = formWith(forms, 'aria-label="Aumentar quantidade"').fields;
-    expect(fields.line_version).toBeTruthy();
-    mocks.cartPatch.mockResolvedValue(
-      problem(422, { code: "cart.item.quantity_exceeds_stock", max: 2 }),
+  it("409 de outra aba na quantidade volta com a mensagem do cart", async () => {
+    mocks.cartPatch.mockResolvedValue(problem(409, { code: "cart.cart.concurrent_update" }));
+
+    const state = await actions.updateQuantityAction(
+      null,
+      form({ variant_id: VARIANT, quantity: "3" }),
     );
 
-    const state = await actions.updateQuantityAction(null, form(fields));
+    expect(state).toEqual({
+      ok: false,
+      message: "Seu carrinho mudou em outra aba. Tente de novo.",
+    });
+  });
 
-    expect(state).toMatchObject({ ok: false, version: fields.line_version });
+  it("Remover cupom: as classes próprias vencem as do Button ghost (twMerge)", async () => {
+    mocks.cartGet.mockResolvedValue(
+      ok(
+        cartOut({
+          items: [item()],
+          coupon: { code: "VERAO", valid: true, reason: null, min_order_cents: null },
+        }),
+      ),
+    );
+
+    const button = formWith(formsOf(await renderPage()), "Remover cupom").html.match(
+      /<button[^>]*class="([^"]*)"/,
+    )?.[1];
+    const classes = new Set(button?.split(" "));
+
+    for (const wanted of ["h-8", "px-2", "text-xs", "text-ks-muted", "hover:text-ks-fg"]) {
+      expect(classes.has(wanted), wanted).toBe(true);
+    }
+    for (const lost of ["h-10", "px-4", "text-sm", "text-ks-fg"]) {
+      expect(classes.has(lost), lost).toBe(false);
+    }
   });
 
   it("ações de botão do carrinho mostram o erro num role=status", async () => {

@@ -5,18 +5,15 @@ import { formatBRL } from "@katoshop/ui/money";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useActionState, useEffect, useRef } from "react";
-import {
-  type LineState,
-  removeItemAction,
-  updateQuantityAction,
-} from "../app/(shop)/carrinho/actions";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { removeItemAction, updateQuantityAction } from "../app/(shop)/carrinho/actions";
 import {
   CART_HEADING_ID,
   lineVersion,
   MAX_QUANTITY_PER_ITEM,
   messageForNotice,
 } from "../lib/cart-messages";
+import { NO_LINE_ERROR, trackLineError, visibleLineError } from "../lib/line-error";
 import { CartNotice } from "./cart-notice";
 
 type CartItem = CartComponents["schemas"]["ItemOut"];
@@ -24,24 +21,28 @@ type CartItem = CartComponents["schemas"]["ItemOut"];
 const STEP =
   "inline-flex size-9 items-center justify-center rounded-[var(--radius)] border border-ks-border text-ks-fg transition-colors duration-[var(--duration-fast)] hover:bg-ks-fg/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ks-focus disabled:pointer-events-none disabled:opacity-40";
 
-/** Erro de uma action, só enquanto a linha estiver na versão que o formulário enviou. */
-function errorFor(state: LineState, version: string): string | undefined {
-  if (!state || state.ok) return undefined;
-  return state.version === undefined || state.version === version ? state.message : undefined;
-}
-
 /**
  * Uma linha do carrinho. Cada botão (−, + e Remover) tem o próprio formulário com os campos em
  * inputs ocultos: um submit com `name`/`value` e `formAction` de função perde o campo (o React
  * troca o `name` no HTML do servidor e monta o FormData sem o submitter). Funciona sem
- * JavaScript. O erro do cart (ex.: estoque) aparece em linha e some quando a linha muda.
+ * JavaScript. O erro do cart (ex.: estoque) aparece em linha no render que o traz (já com os
+ * dados do refresh) e some na próxima mudança da linha (lib/line-error.ts).
  */
 export function CartLine({ item }: { item: CartItem }) {
   const [quantityState, updateQuantity, updating] = useActionState(updateQuantityAction, null);
   const [removeState, removeItem, removing] = useActionState(removeItemAction, null);
   const pending = updating || removing;
   const version = lineVersion(item);
-  const error = errorFor(quantityState, version) ?? errorFor(removeState, version);
+
+  // "Guardar informação de renders anteriores" (setState durante o render, com guarda): vale
+  // também no primeiro render do HTML sem JavaScript, que já chega com o estado da action.
+  const [quantityError, setQuantityError] = useState(NO_LINE_ERROR);
+  const [removeError, setRemoveError] = useState(NO_LINE_ERROR);
+  const nextQuantityError = trackLineError(quantityError, quantityState, version);
+  const nextRemoveError = trackLineError(removeError, removeState, version);
+  if (nextQuantityError !== quantityError) setQuantityError(nextQuantityError);
+  if (nextRemoveError !== removeError) setRemoveError(nextRemoveError);
+  const error = visibleLineError(nextQuantityError) ?? visibleLineError(nextRemoveError);
 
   // Com JavaScript: a linha removida desmonta e o foco iria para o body; leva ao título.
   const removeRequested = useRef(false);
@@ -67,12 +68,7 @@ export function CartLine({ item }: { item: CartItem }) {
       ? messageForNotice(item.notice)
       : null;
   const muted = item.unavailable ? "opacity-50" : "";
-  const lineFields = (
-    <>
-      <input type="hidden" name="variant_id" value={item.variant_id} />
-      <input type="hidden" name="line_version" value={version} />
-    </>
-  );
+  const lineFields = <input type="hidden" name="variant_id" value={item.variant_id} />;
 
   return (
     <li className="flex gap-4 border-b border-ks-border py-5">

@@ -20,15 +20,13 @@ import {
  * JavaScript.
  */
 
-/** `version`: a versão da linha que o formulário enviou (`lineVersion`), devolvida com o erro. */
-export type LineState = { ok: boolean; message?: string; max?: number; version?: string } | null;
+export type LineState = { ok: boolean; message?: string; max?: number } | null;
 export type CouponState = { ok: boolean; message?: string; code?: string } | null;
 export type ButtonState = { ok: boolean; message?: string } | null;
 
 const PATH = "/carrinho";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_COUPON_INPUT = 64;
-const MAX_VERSION_INPUT = 100;
 const UPDATE_FAILED = "Não foi possível atualizar o carrinho agora. Tente de novo em instantes.";
 
 type CartCall = Parameters<typeof mutateCart>[0];
@@ -55,15 +53,13 @@ function updateError(error: unknown): { message: string; max?: number } {
   return cartErrorMessage(error);
 }
 
-/** Uma escrita de linha: erro em pt-BR com a versão enviada (o erro some quando a linha muda). */
-async function lineWrite(formData: FormData, call: CartCall): Promise<LineState> {
-  const version = field(formData, "line_version").slice(0, MAX_VERSION_INPUT);
-  const tag = version ? { version } : {};
+/** Uma escrita de linha: erro em pt-BR, mostrado em linha (components/cart-line.tsx). */
+async function lineWrite(call: CartCall): Promise<LineState> {
   try {
     await mutateCart(call);
   } catch (error) {
     revalidatePath(PATH);
-    return { ok: false, ...updateError(error), ...tag };
+    return { ok: false, ...updateError(error) };
   }
   revalidatePath(PATH);
   return { ok: true };
@@ -92,7 +88,7 @@ export async function updateQuantityAction(
   if (!(quantity >= 1 && quantity <= MAX_QUANTITY_PER_ITEM)) {
     return { ok: false, message: `Escolha uma quantidade de 1 a ${MAX_QUANTITY_PER_ITEM}.` };
   }
-  return lineWrite(formData, (headers, signal) =>
+  return lineWrite((headers, signal) =>
     cart().PATCH("/v1/cart/items/{variant_id}", {
       params: { path: { variant_id: variantId } },
       body: { quantity },
@@ -105,7 +101,7 @@ export async function updateQuantityAction(
 export async function removeItemAction(_prev: LineState, formData: FormData): Promise<LineState> {
   const variantId = variantIdOf(formData);
   if (!variantId) return { ok: false, message: UPDATE_FAILED };
-  return lineWrite(formData, (headers, signal) =>
+  return lineWrite((headers, signal) =>
     cart().DELETE("/v1/cart/items/{variant_id}", {
       params: { path: { variant_id: variantId } },
       headers,

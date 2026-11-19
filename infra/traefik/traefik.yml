@@ -5,6 +5,11 @@ entryPoints:
     http:
       # cabeçalhos que se passam por outros (X_Forwarded_For) são descartados
       aliasHeadersStrategy: delete
+      # %2F e %5C no caminho são recusados: o router casa com o caminho ainda codificado, mas o
+      # uvicorn decodifica, então `/identity/v1/auth%2Flogin` chegaria ao login sem o rate limit.
+      encodedCharacters:
+        allowEncodedSlash: false
+        allowEncodedBackSlash: false
   traefik:
     address: ":8080"
     http:

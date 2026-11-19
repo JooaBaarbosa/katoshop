@@ -1,28 +1,32 @@
 # Rotas do gateway api.katoshop.localhost (os prefixos /identity e /catalog são
 # removidos antes de chegar aos serviços), da loja em katoshop.localhost e do painel em
 # admin.katoshop.localhost.
+#
+# PathPrefix é prefixo de texto: PathPrefix(`/catalog`) casaria com `/catalogv1/...`, e o
+# stripPrefix devolveria `/v1/...` ao serviço, escapando dos routers de rate limit.
+# Por isso toda regra com prefixo usa PathRegexp ancorado em fronteira de segmento: `(/|$)`.
 http:
   routers:
     # Só endpoints de credencial (R15). Refresh e logout ficam de fora: os BFFs do Next
     # saem pelo mesmo IP e esgotariam o balde renovando sessões no SSR.
     identity-auth:
       rule: >-
-        Host(`api.katoshop.localhost`) && (Path(`/identity/v1/auth/login`)
-        || Path(`/identity/v1/auth/staff/login`) || Path(`/identity/v1/auth/register`))
+        Host(`api.katoshop.localhost`)
+        && PathRegexp(`^/identity/v1/auth/(login|staff/login|register)/?$`)
       entryPoints: [web]
       middlewares: [auth-ratelimit, identity-strip]
       service: identity
       priority: 200
 
     identity:
-      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/identity`)"
+      rule: "Host(`api.katoshop.localhost`) && PathRegexp(`^/identity(/|$)`)"
       entryPoints: [web]
       middlewares: [identity-strip]
       service: identity
       priority: 100
 
     catalog:
-      rule: "Host(`api.katoshop.localhost`) && PathPrefix(`/catalog`)"
+      rule: "Host(`api.katoshop.localhost`) && PathRegexp(`^/catalog(/|$)`)"
       entryPoints: [web]
       middlewares: [catalog-body-limit, catalog-strip]
       service: catalog

@@ -1,3 +1,4 @@
+import importlib.util
 import logging
 import sys
 from collections.abc import Mapping
@@ -12,6 +13,7 @@ from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import MetricReader, PeriodicExportingMetricReader
@@ -100,6 +102,12 @@ def build_providers(settings: BaseServiceSettings) -> tuple[TracerProvider, Mete
     return tracer_provider, MeterProvider(resource=resource, metric_readers=readers)
 
 
+def _instrument_optional_clients(tracer_provider: TracerProvider) -> None:
+    """Clientes que só alguns serviços instalam: o Redis entra quando o pacote existe."""
+    if importlib.util.find_spec("redis") is not None:
+        RedisInstrumentor().instrument(tracer_provider=tracer_provider)
+
+
 # Estado global do processo: providers e instrumentadores globais são criados uma vez só.
 _providers: tuple[TracerProvider, MeterProvider] | None = None
 
@@ -113,8 +121,9 @@ def configure_observability(
 ) -> None:
     """Providers OTel (OTLP gRPC quando `otel_endpoint` existe) e instrumentação.
 
-    Idempotente: providers e instrumentadores globais (httpx, asyncpg, aio-pika) são configurados
-    na primeira chamada; a cada chamada o `app` e o `engine` recebidos são instrumentados.
+    Idempotente: providers e instrumentadores globais (httpx, asyncpg, aio-pika e, quando o
+    pacote `redis` está instalado, Redis) são configurados na primeira chamada; a cada chamada o
+    `app` e o `engine` recebidos são instrumentados.
     `span_exporter` (opcional, para testes) recebe todos os spans via processador síncrono.
     """
     global _providers
@@ -127,6 +136,7 @@ def configure_observability(
         )
         AsyncPGInstrumentor().instrument(tracer_provider=tracer_provider)
         AioPikaInstrumentor().instrument(tracer_provider=tracer_provider)
+        _instrument_optional_clients(tracer_provider)
         _providers = (tracer_provider, meter_provider)
     tracer_provider, meter_provider = _providers
     if span_exporter is not None:

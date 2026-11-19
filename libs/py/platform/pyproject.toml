@@ -21,6 +21,7 @@ dependencies = [
     "asyncpg==0.32.0",
     "aio-pika==10.2.3",
     "opentelemetry-instrumentation-aio-pika==0.66b2",
+    "opentelemetry-instrumentation-redis==0.66b2",
 ]
 
 [project.optional-dependencies]

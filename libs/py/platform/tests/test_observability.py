@@ -11,6 +11,7 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.metrics import _internal as metrics_internal
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.trace import TracerProvider
@@ -94,9 +95,14 @@ def _settings(endpoint: str | None = None) -> _Settings:
 def otel_reset():
     """Desfaz o estado global do OTel para que os testes não vazem providers."""
     yield
-    HTTPXClientInstrumentor().uninstrument()
-    AsyncPGInstrumentor().uninstrument()
-    AioPikaInstrumentor().uninstrument()
+    for instrumentor in (
+        HTTPXClientInstrumentor(),
+        AsyncPGInstrumentor(),
+        AioPikaInstrumentor(),
+        RedisInstrumentor(),
+    ):
+        if instrumentor.is_instrumented_by_opentelemetry:
+            instrumentor.uninstrument()
     observability._providers = None  # noqa: SLF001
     trace._TRACER_PROVIDER = None  # noqa: SLF001
     trace._TRACER_PROVIDER_SET_ONCE._done = False  # noqa: SLF001
@@ -150,3 +156,40 @@ async def test_configure_observability_twice_instruments_both_apps(asgi_client_f
 def test_configure_observability_instruments_aio_pika(otel_reset):
     configure_observability(_app(), _settings())
     assert AioPikaInstrumentor().is_instrumented_by_opentelemetry
+
+
+def test_configure_observability_instruments_redis_when_installed(otel_reset):
+    configure_observability(_app(), _settings())
+    assert RedisInstrumentor().is_instrumented_by_opentelemetry
+
+
+def test_configure_observability_twice_keeps_messaging_instrumentation(otel_reset):
+    configure_observability(_app(), _settings())
+    configure_observability(_app(), _settings())
+    assert AioPikaInstrumentor().is_instrumented_by_opentelemetry
+    assert RedisInstrumentor().is_instrumented_by_opentelemetry
+
+
+async def test_redis_commands_produce_client_spans(otel_reset):
+    from redis.asyncio import Redis
+
+    exporter = InMemorySpanExporter()
+    configure_observability(_app(), _settings(), span_exporter=exporter)
+    # porta fechada: o comando falha, mas o span do cliente é criado e registra o erro
+    client = Redis(host="127.0.0.1", port=1, socket_connect_timeout=0.2)
+    with pytest.raises(Exception):  # noqa: B017
+        await client.ping()
+    await client.aclose()
+    spans = [s for s in exporter.get_finished_spans() if s.kind == SpanKind.CLIENT]
+    assert any(s.name == "PING" for s in spans)
+
+
+def test_configure_observability_skips_redis_when_not_installed(otel_reset, monkeypatch):
+    real_find_spec = observability.importlib.util.find_spec
+
+    def fake_find_spec(name: str, package: str | None = None):
+        return None if name == "redis" else real_find_spec(name, package)
+
+    monkeypatch.setattr(observability.importlib.util, "find_spec", fake_find_spec)
+    configure_observability(_app(), _settings())
+    assert not RedisInstrumentor().is_instrumented_by_opentelemetry

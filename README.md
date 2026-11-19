@@ -234,8 +234,10 @@ docs/                    arquitetura, ADRs, specs e planos
   como inexistente.
 - A loja fala com o cart pela rede interna (`CART_API_URL`, padrão `http://cart:8000` no compose). O `/cart/v1/...`
   público do gateway tem limite de 20 req/s, rajada de 40, por IP (429 acima disso). O Redis do cart tem `maxmemory`
-  de 200 MB com `volatile-ttl`: cheio, expulsa primeiro carrinhos de visitante perto de expirar; carrinho de cliente não
-  tem TTL e nunca é expulso ([arquitetura](docs/architecture.md#gateway-e-limites-de-taxa)).
+  de 200 MB com `volatile-ttl`: cheio, expulsa primeiro as chaves com menor prazo restante (cache de desconto, depois
+  marcas de eventos processados, depois carrinhos de visitante, chave a chave); carrinho de cliente não tem TTL e nunca
+  é expulso, então com a memória tomada por eles as escritas respondem 503
+  ([arquitetura](docs/architecture.md#gateway-e-limites-de-taxa)).
 - Com o promotions fora do ar, o carrinho continua funcionando sem desconto e mostra "Não foi possível validar o cupom
   agora."; aplicar um cupom novo nesse estado responde 503 e não grava nada.
 - Eventos publicados antes de o cart declarar a fila `cart.catalog-events` (primeira subida com o cart parado) se

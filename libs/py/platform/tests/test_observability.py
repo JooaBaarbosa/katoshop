@@ -1,6 +1,8 @@
 # ruff: noqa: S105, S106
 import json
 import logging
+import subprocess
+import sys
 
 import pytest
 import structlog
@@ -184,12 +186,27 @@ async def test_redis_commands_produce_client_spans(otel_reset):
     assert any(s.name == "PING" for s in spans)
 
 
-def test_configure_observability_skips_redis_when_not_installed(otel_reset, monkeypatch):
-    real_find_spec = observability.importlib.util.find_spec
+def test_configure_observability_without_redis_installed_does_not_import_it():
+    # Serviços sem o pacote redis (identity, catalog, promotions): importar e configurar a
+    # observabilidade não pode falhar. `sys.modules["redis"] = None` faz o import levantar
+    # ModuleNotFoundError, como numa imagem sem o pacote.
+    code = """
+import sys
+sys.modules["redis"] = None
+from fastapi import FastAPI
+from pydantic_settings import SettingsConfigDict
+from ks_platform.observability import configure_observability
+from ks_platform.settings import BaseServiceSettings
 
-    def fake_find_spec(name: str, package: str | None = None):
-        return None if name == "redis" else real_find_spec(name, package)
+class S(BaseServiceSettings):
+    model_config = SettingsConfigDict(env_prefix="KS_TEST_")
 
-    monkeypatch.setattr(observability.importlib.util, "find_spec", fake_find_spec)
-    configure_observability(_app(), _settings())
-    assert not RedisInstrumentor().is_instrumented_by_opentelemetry
+configure_observability(FastAPI(), S(service_name="svc", database_url="x", jwks_url="y"))
+assert "opentelemetry.instrumentation.redis" not in sys.modules
+print("ok")
+"""
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "ok"

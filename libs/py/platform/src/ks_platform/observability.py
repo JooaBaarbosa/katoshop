@@ -13,7 +13,6 @@ from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import MetricReader, PeriodicExportingMetricReader
@@ -103,9 +102,15 @@ def build_providers(settings: BaseServiceSettings) -> tuple[TracerProvider, Mete
 
 
 def _instrument_optional_clients(tracer_provider: TracerProvider) -> None:
-    """Clientes que só alguns serviços instalam: o Redis entra quando o pacote existe."""
-    if importlib.util.find_spec("redis") is not None:
-        RedisInstrumentor().instrument(tracer_provider=tracer_provider)
+    """Clientes que só alguns serviços instalam: o Redis entra quando o pacote existe.
+
+    O import fica aqui dentro porque o módulo do instrumentador importa `redis` ao carregar.
+    """
+    if importlib.util.find_spec("redis") is None:
+        return
+    from opentelemetry.instrumentation.redis import RedisInstrumentor
+
+    RedisInstrumentor().instrument(tracer_provider=tracer_provider)
 
 
 # Estado global do processo: providers e instrumentadores globais são criados uma vez só.

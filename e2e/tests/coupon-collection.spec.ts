@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { healVariant, SEED, seedPrice } from "./seed-reference";
 import {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
@@ -6,18 +7,27 @@ import {
   addToCart,
   adminLogin,
   brl,
+  openApi,
+  staffToken,
   summaryValue,
 } from "./support";
 
 // Camiseta pesada preta está em "Básicos pesados"; o boné não está.
-const IN_COLLECTION = { slug: "camiseta-pesada-preta", cents: 12900 };
-const OUTSIDE = { slug: "bone-lavado-cinza", cents: 11900 };
+const IN_COLLECTION = SEED.camisetaPretaM;
+const OUTSIDE = SEED.boneCinzaM;
 
 test("cupom do admin restrito à coleção desconta só o item da coleção", async ({
   page,
+  context,
   browser,
 }) => {
   test.setTimeout(120_000);
+  // os totais usam os preços do seed: cura sobras de uma execução interrompida antes
+  const api = await openApi(context);
+  const token = await staffToken(api);
+  await healVariant(api, token, IN_COLLECTION);
+  await healVariant(api, token, OUTSIDE);
+  await api.close();
   // o archive_test_data desativa os E2E-* depois (R26)
   const code = `E2E-COL-${Date.now()}`;
 
@@ -35,22 +45,22 @@ test("cupom do admin restrito à coleção desconta só o item da coleção", as
   // um item da coleção e um de fora: o desconto (15%) é só sobre o da coleção
   const store = await browser.newContext({ locale: "pt-BR" });
   const shopper = await store.newPage();
-  await addToCart(shopper, IN_COLLECTION.slug, "PRT", "M");
-  await addToCart(shopper, OUTSIDE.slug, "CNZ", "M");
+  await addToCart(shopper, IN_COLLECTION.slug, IN_COLLECTION.color, IN_COLLECTION.size);
+  await addToCart(shopper, OUTSIDE.slug, OUTSIDE.color, OUTSIDE.size);
   await shopper.goto("/carrinho");
   await shopper.getByLabel("Cupom", { exact: true }).fill(code.toLowerCase());
   await shopper.getByRole("button", { name: "Aplicar" }).click();
-  const discount = Math.round((IN_COLLECTION.cents * 15) / 100);
+  const discount = Math.round((seedPrice(IN_COLLECTION) * 15) / 100);
   await expect(summaryValue(shopper, "Desconto")).toHaveText(`− ${brl(discount)}`);
   await expect(summaryValue(shopper, "Total")).toHaveText(
-    brl(IN_COLLECTION.cents + OUTSIDE.cents - discount),
+    brl(seedPrice(IN_COLLECTION) + seedPrice(OUTSIDE) - discount),
   );
   await store.close();
 
   // só o item de fora: o cupom é recusado com o motivo
   const other = await browser.newContext({ locale: "pt-BR" });
   const outsider = await other.newPage();
-  await addToCart(outsider, OUTSIDE.slug, "CNZ", "M");
+  await addToCart(outsider, OUTSIDE.slug, OUTSIDE.color, OUTSIDE.size);
   await outsider.goto("/carrinho");
   await outsider.getByLabel("Cupom", { exact: true }).fill(code);
   await outsider.getByRole("button", { name: "Aplicar" }).click();

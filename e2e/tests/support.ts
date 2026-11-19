@@ -179,6 +179,7 @@ export type AdminVariant = {
   size_code: string;
   price_cents: number | null;
   effective_price_cents: number;
+  stock_on_hand: number;
   available: number;
   version: number;
 };

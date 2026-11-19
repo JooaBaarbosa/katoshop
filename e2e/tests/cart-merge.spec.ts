@@ -51,6 +51,8 @@ test("merge acima do estoque ajusta a quantidade e o aviso some com Entendi", as
     line.getByText("Ajustamos a quantidade para 1, que é o que temos em estoque."),
   ).toBeVisible();
 
+  // o aviso está na tela logo antes do clique: o toHaveCount(0) abaixo não é vazio
+  await expect(flash).toBeVisible();
   await page.getByRole("button", { name: "Entendi" }).click();
   await expect(flash).toHaveCount(0);
 });

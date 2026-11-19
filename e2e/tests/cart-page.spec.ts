@@ -1,8 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
+import { healVariant, SEED, setStock } from "./seed-reference";
 import {
   addToCart,
-  adjustStock,
-  adminProduct,
   brl,
   cartLine,
   guestCart,
@@ -10,7 +9,6 @@ import {
   staffToken,
   submit,
   summaryValue,
-  variantOf,
 } from "./support";
 
 // 129,90 por unidade: com 2 unidades o subtotal (259,80) passa do mínimo do BEMVINDO10.
@@ -75,40 +73,43 @@ test("estoque reduzido com a página aberta: o + mostra o aviso depois do refres
   page,
   context,
 }) => {
-  const product = { slug: "bermuda-moletom", name: "Bermuda de moletom" };
-  await addToCart(page, product.slug, "CNZ", "M");
-  await page.goto("/carrinho");
-  const line = cartLine(page, product.name);
-  const quantity = line.getByLabel("Quantidade", { exact: true });
-  await line.getByRole("button", { name: "Aumentar quantidade" }).click();
-  await expect(quantity).toHaveText("2");
-
+  const bermuda = SEED.bermudaCinzaM;
   const api = await openApi(context);
-  const token = await staffToken(api);
-  const variant = variantOf(await adminProduct(api, token, product.slug), "CNZ", "M");
-  // deixa exatamente 2 disponíveis: a linha não é reduzida, mas o 3 passa do estoque
-  const delta = 2 - variant.available;
-  expect(delta).toBeLessThan(0);
-  await adjustStock(api, token, variant.id, delta, "Teste e2e: estoque desatualizado no carrinho");
   try {
-    // espera o evento chegar ao cart; a página continua com o + habilitado (desatualizada)
-    await expect
-      .poll(
-        async () =>
-          (await guestCart(api, context)).items.find((i) => i.variant_id === variant.id)?.available,
-        { timeout: 15_000, intervals: [500, 1_000] },
-      )
-      .toBe(2);
-    const plus = line.getByRole("button", { name: "Aumentar quantidade" });
-    await expect(plus).toBeEnabled();
-    await plus.click();
+    const token = await staffToken(api);
+    // começa do estoque do seed (uma execução interrompida pode ter deixado 2)
+    const { variant } = await healVariant(api, token, bermuda);
+    try {
+      await addToCart(page, bermuda.slug, bermuda.color, bermuda.size);
+      await page.goto("/carrinho");
+      const line = cartLine(page, bermuda.name);
+      const quantity = line.getByLabel("Quantidade", { exact: true });
+      const plus = line.getByRole("button", { name: "Aumentar quantidade" });
+      await plus.click();
+      await expect(quantity).toHaveText("2");
 
-    // a mensagem chega no mesmo commit do refresh (a linha já com o estoque novo)
-    await expect(line.getByText("Só temos 2 unidades desse tamanho.")).toBeVisible();
-    await expect(quantity).toHaveText("2");
-    await expect(plus).toBeDisabled();
+      // estoque absoluto de 2: a linha não é reduzida, mas o 3 passa do estoque
+      await setStock(api, token, bermuda, 2, "Teste e2e: estoque desatualizado no carrinho");
+      // espera o evento chegar ao cart; a página continua com o + habilitado (desatualizada)
+      await expect
+        .poll(
+          async () =>
+            (await guestCart(api, context)).items.find((i) => i.variant_id === variant.id)
+              ?.available,
+          { timeout: 15_000, intervals: [500, 1_000] },
+        )
+        .toBe(2);
+      await expect(plus).toBeEnabled();
+      await plus.click();
+
+      // a mensagem chega no mesmo commit do refresh (a linha já com o estoque novo)
+      await expect(line.getByText("Só temos 2 unidades desse tamanho.")).toBeVisible();
+      await expect(quantity).toHaveText("2");
+      await expect(plus).toBeDisabled();
+    } finally {
+      await healVariant(api, token, bermuda, { log: false });
+    }
   } finally {
-    await adjustStock(api, token, variant.id, -delta, "Teste e2e: estoque restaurado");
     await api.close();
   }
 });

@@ -5,9 +5,18 @@ import { formatBRL } from "@katoshop/ui/money";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useActionState } from "react";
-import { removeItemAction, updateQuantityAction } from "../app/(shop)/carrinho/actions";
-import { MAX_QUANTITY_PER_ITEM, messageForNotice } from "../lib/cart-messages";
+import { useActionState, useEffect, useRef } from "react";
+import {
+  type LineState,
+  removeItemAction,
+  updateQuantityAction,
+} from "../app/(shop)/carrinho/actions";
+import {
+  CART_HEADING_ID,
+  lineVersion,
+  MAX_QUANTITY_PER_ITEM,
+  messageForNotice,
+} from "../lib/cart-messages";
 import { CartNotice } from "./cart-notice";
 
 type CartItem = CartComponents["schemas"]["ItemOut"];
@@ -15,19 +24,36 @@ type CartItem = CartComponents["schemas"]["ItemOut"];
 const STEP =
   "inline-flex size-9 items-center justify-center rounded-[var(--radius)] border border-ks-border text-ks-fg transition-colors duration-[var(--duration-fast)] hover:bg-ks-fg/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ks-focus disabled:pointer-events-none disabled:opacity-40";
 
+/** Erro de uma action, só enquanto a linha estiver na versão que o formulário enviou. */
+function errorFor(state: LineState, version: string): string | undefined {
+  if (!state || state.ok) return undefined;
+  return state.version === undefined || state.version === version ? state.message : undefined;
+}
+
 /**
- * Uma linha do carrinho. Os botões − e + e o "Remover" são submits do mesmo formulário com
- * actions diferentes (`formAction`), então funcionam sem JavaScript. O erro do cart (ex.:
- * estoque) aparece em linha.
+ * Uma linha do carrinho. Cada botão (−, + e Remover) tem o próprio formulário com os campos em
+ * inputs ocultos: um submit com `name`/`value` e `formAction` de função perde o campo (o React
+ * troca o `name` no HTML do servidor e monta o FormData sem o submitter). Funciona sem
+ * JavaScript. O erro do cart (ex.: estoque) aparece em linha e some quando a linha muda.
  */
 export function CartLine({ item }: { item: CartItem }) {
   const [quantityState, updateQuantity, updating] = useActionState(updateQuantityAction, null);
   const [removeState, removeItem, removing] = useActionState(removeItemAction, null);
   const pending = updating || removing;
-  const error =
-    (quantityState && !quantityState.ok && quantityState.message) ||
-    (removeState && !removeState.ok && removeState.message) ||
-    undefined;
+  const version = lineVersion(item);
+  const error = errorFor(quantityState, version) ?? errorFor(removeState, version);
+
+  // Com JavaScript: a linha removida desmonta e o foco iria para o body; leva ao título.
+  const removeRequested = useRef(false);
+  useEffect(() => {
+    if (removeState && !removeState.ok) removeRequested.current = false;
+  }, [removeState]);
+  useEffect(() => {
+    const requested = removeRequested;
+    return () => {
+      if (requested.current) document.getElementById(CART_HEADING_ID)?.focus();
+    };
+  }, []);
 
   const ceiling = Math.min(item.available, MAX_QUANTITY_PER_ITEM);
   const notice = item.unavailable
@@ -41,6 +67,12 @@ export function CartLine({ item }: { item: CartItem }) {
       ? messageForNotice(item.notice)
       : null;
   const muted = item.unavailable ? "opacity-50" : "";
+  const lineFields = (
+    <>
+      <input type="hidden" name="variant_id" value={item.variant_id} />
+      <input type="hidden" name="line_version" value={version} />
+    </>
+  );
 
   return (
     <li className="flex gap-4 border-b border-ks-border py-5">
@@ -88,48 +120,59 @@ export function CartLine({ item }: { item: CartItem }) {
 
         {notice && <CartNotice message={notice} />}
 
-        <form className="flex flex-wrap items-center gap-3">
-          <input type="hidden" name="variant_id" value={item.variant_id} />
+        <div className="flex flex-wrap items-center gap-3">
           {!item.unavailable && (
             <div className="flex items-center gap-2">
-              <button
-                type="submit"
-                name="quantity"
-                value={item.quantity - 1}
-                formAction={updateQuantity}
-                aria-label="Diminuir quantidade"
-                disabled={pending || item.quantity <= 1}
-                className={STEP}
+              <form action={updateQuantity}>
+                {lineFields}
+                <input type="hidden" name="quantity" value={item.quantity - 1} />
+                <button
+                  type="submit"
+                  aria-label="Diminuir quantidade"
+                  disabled={pending || item.quantity <= 1}
+                  className={STEP}
+                >
+                  <Minus aria-hidden className="size-4" />
+                </button>
+              </form>
+              <output
+                aria-label="Quantidade"
+                aria-live="polite"
+                className="w-6 text-center font-mono tabular-nums"
               >
-                <Minus aria-hidden className="size-4" />
-              </button>
-              <span className="sr-only">Quantidade</span>
-              <output aria-live="polite" className="w-6 text-center font-mono tabular-nums">
                 {item.quantity}
               </output>
-              <button
-                type="submit"
-                name="quantity"
-                value={item.quantity + 1}
-                formAction={updateQuantity}
-                aria-label="Aumentar quantidade"
-                disabled={pending || item.quantity >= ceiling}
-                className={STEP}
-              >
-                <Plus aria-hidden className="size-4" />
-              </button>
+              <form action={updateQuantity}>
+                {lineFields}
+                <input type="hidden" name="quantity" value={item.quantity + 1} />
+                <button
+                  type="submit"
+                  aria-label="Aumentar quantidade"
+                  disabled={pending || item.quantity >= ceiling}
+                  className={STEP}
+                >
+                  <Plus aria-hidden className="size-4" />
+                </button>
+              </form>
             </div>
           )}
-          <button
-            type="submit"
-            formAction={removeItem}
-            disabled={pending}
-            className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold uppercase tracking-wide text-ks-muted transition-colors duration-[var(--duration-fast)] hover:bg-ks-fg/10 hover:text-ks-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ks-focus disabled:opacity-40"
+          <form
+            action={removeItem}
+            onSubmit={() => {
+              removeRequested.current = true;
+            }}
           >
-            <Trash2 aria-hidden className="size-4" />
-            Remover
-          </button>
-        </form>
+            {lineFields}
+            <button
+              type="submit"
+              disabled={pending}
+              className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold uppercase tracking-wide text-ks-muted transition-colors duration-[var(--duration-fast)] hover:bg-ks-fg/10 hover:text-ks-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ks-focus disabled:opacity-40"
+            >
+              <Trash2 aria-hidden className="size-4" />
+              Remover
+            </button>
+          </form>
+        </div>
         <p role="status" aria-live="polite" className="text-sm text-red-400">
           {error}
         </p>

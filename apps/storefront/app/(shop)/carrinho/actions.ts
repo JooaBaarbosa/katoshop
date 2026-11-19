@@ -16,16 +16,22 @@ import {
  * `withAuth(..., { refresh: true })` (R18); visitante manda o `X-Cart-Id` do cookie. Sem
  * JavaScript, os formulários postam a action no corpo e o router `storefront-forms` do Traefik
  * aplica o limite por IP (R24). Server Action é endpoint público: toda entrada é revalidada.
+ * Todas têm a assinatura de `useActionState`, para o erro aparecer num role=status também sem
+ * JavaScript.
  */
 
-export type LineState = { ok: boolean; message?: string; max?: number } | null;
+/** `version`: a versão da linha que o formulário enviou (`lineVersion`), devolvida com o erro. */
+export type LineState = { ok: boolean; message?: string; max?: number; version?: string } | null;
 export type CouponState = { ok: boolean; message?: string; code?: string } | null;
+export type ButtonState = { ok: boolean; message?: string } | null;
 
 const PATH = "/carrinho";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
 const MAX_COUPON_INPUT = 64;
+const MAX_VERSION_INPUT = 100;
 const UPDATE_FAILED = "Não foi possível atualizar o carrinho agora. Tente de novo em instantes.";
+
+type CartCall = Parameters<typeof mutateCart>[0];
 
 function field(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -38,7 +44,7 @@ function variantIdOf(formData: FormData): string | undefined {
 }
 
 /** As mensagens de `cartErrorMessage` falam de "adicionar"; aqui a falha é de atualização. */
-function lineError(error: unknown): { message: string; max?: number } {
+function updateError(error: unknown): { message: string; max?: number } {
   if (
     !(error instanceof ApiProblem) ||
     error.code === "cart.catalog.unavailable" ||
@@ -49,17 +55,30 @@ function lineError(error: unknown): { message: string; max?: number } {
   return cartErrorMessage(error);
 }
 
-/** Loga a falha sem cookies nem ids (as ações sem estado não têm onde mostrar o erro). */
-function logFailure(event: string, error: unknown): void {
-  console.warn(
-    JSON.stringify({
-      level: "warn",
-      event,
-      ...(error instanceof ApiProblem
-        ? { status: error.status, code: error.code }
-        : { error: error instanceof Error ? error.name : String(error) }),
-    }),
-  );
+/** Uma escrita de linha: erro em pt-BR com a versão enviada (o erro some quando a linha muda). */
+async function lineWrite(formData: FormData, call: CartCall): Promise<LineState> {
+  const version = field(formData, "line_version").slice(0, MAX_VERSION_INPUT);
+  const tag = version ? { version } : {};
+  try {
+    await mutateCart(call);
+  } catch (error) {
+    revalidatePath(PATH);
+    return { ok: false, ...updateError(error), ...tag };
+  }
+  revalidatePath(PATH);
+  return { ok: true };
+}
+
+/** Uma escrita de botão (sem campos): `{ok:false, message}` para o role=status do formulário. */
+async function buttonWrite(call: CartCall): Promise<ButtonState> {
+  try {
+    await mutateCart(call);
+  } catch (error) {
+    revalidatePath(PATH);
+    return { ok: false, message: updateError(error).message };
+  }
+  revalidatePath(PATH);
+  return { ok: true };
 }
 
 export async function updateQuantityAction(
@@ -71,62 +90,35 @@ export async function updateQuantityAction(
   const quantity = /^\d{1,2}$/.test(raw) ? Number(raw) : NaN;
   if (!variantId) return { ok: false, message: UPDATE_FAILED };
   if (!(quantity >= 1 && quantity <= MAX_QUANTITY_PER_ITEM)) {
-    return {
-      ok: false,
-      message: `Escolha uma quantidade de 1 a ${MAX_QUANTITY_PER_ITEM}.`,
-    };
+    return { ok: false, message: `Escolha uma quantidade de 1 a ${MAX_QUANTITY_PER_ITEM}.` };
   }
-
-  try {
-    await mutateCart((headers, signal) =>
-      cart().PATCH("/v1/cart/items/{variant_id}", {
-        params: { path: { variant_id: variantId } },
-        body: { quantity },
-        headers,
-        signal,
-      }),
-    );
-  } catch (error) {
-    revalidatePath(PATH);
-    return { ok: false, ...lineError(error) };
-  }
-  revalidatePath(PATH);
-  return { ok: true };
+  return lineWrite(formData, (headers, signal) =>
+    cart().PATCH("/v1/cart/items/{variant_id}", {
+      params: { path: { variant_id: variantId } },
+      body: { quantity },
+      headers,
+      signal,
+    }),
+  );
 }
 
 export async function removeItemAction(_prev: LineState, formData: FormData): Promise<LineState> {
   const variantId = variantIdOf(formData);
   if (!variantId) return { ok: false, message: UPDATE_FAILED };
-
-  try {
-    await mutateCart((headers, signal) =>
-      cart().DELETE("/v1/cart/items/{variant_id}", {
-        params: { path: { variant_id: variantId } },
-        headers,
-        signal,
-      }),
-    );
-  } catch (error) {
-    revalidatePath(PATH);
-    return { ok: false, ...lineError(error) };
-  }
-  revalidatePath(PATH);
-  return { ok: true };
+  return lineWrite(formData, (headers, signal) =>
+    cart().DELETE("/v1/cart/items/{variant_id}", {
+      params: { path: { variant_id: variantId } },
+      headers,
+      signal,
+    }),
+  );
 }
 
-/**
- * "Limpar indisponíveis". Sem estado de formulário: numa falha a página volta a mostrar os
- * itens como estão (ou a página de erro, se o cart estiver fora).
- */
-export async function removeUnavailableAction(): Promise<void> {
-  try {
-    await mutateCart((headers, signal) =>
-      cart().DELETE("/v1/cart/items/unavailable", { headers, signal }),
-    );
-  } catch (error) {
-    logFailure("cart.remove_unavailable_failed", error);
-  }
-  revalidatePath(PATH);
+/** "Limpar indisponíveis". */
+export async function removeUnavailableAction(): Promise<ButtonState> {
+  return buttonWrite((headers, signal) =>
+    cart().DELETE("/v1/cart/items/unavailable", { headers, signal }),
+  );
 }
 
 export async function applyCouponAction(
@@ -163,31 +155,21 @@ export async function applyCouponAction(
         return { ok: false, code, message: messageForCoupon("promotions.coupon.not_found") };
       }
     }
-    return { ok: false, code, message: lineError(error).message };
+    return { ok: false, code, message: updateError(error).message };
   }
   revalidatePath(PATH);
   return { ok: true };
 }
 
-export async function removeCouponAction(): Promise<void> {
-  try {
-    await mutateCart((headers, signal) => cart().DELETE("/v1/cart/coupon", { headers, signal }));
-  } catch (error) {
-    logFailure("cart.remove_coupon_failed", error);
-  }
-  revalidatePath(PATH);
+export async function removeCouponAction(): Promise<ButtonState> {
+  return buttonWrite((headers, signal) => cart().DELETE("/v1/cart/coupon", { headers, signal }));
 }
 
 /**
  * "Entendi": limpa os avisos dos itens e o aviso do merge do login (`ks_cart_flash`). O flash
- * só é apagado aqui, numa action (R18), e expira sozinho em 120 s.
+ * só é apagado aqui, numa action (R18), mesmo se o cart falhar; e expira sozinho em 120 s.
  */
-export async function ackNoticesAction(): Promise<void> {
+export async function ackNoticesAction(): Promise<ButtonState> {
   (await cookies()).delete(CART_FLASH_COOKIE);
-  try {
-    await mutateCart((headers, signal) => cart().POST("/v1/cart/notices/ack", { headers, signal }));
-  } catch (error) {
-    logFailure("cart.ack_notices_failed", error);
-  }
-  revalidatePath(PATH);
+  return buttonWrite((headers, signal) => cart().POST("/v1/cart/notices/ack", { headers, signal }));
 }

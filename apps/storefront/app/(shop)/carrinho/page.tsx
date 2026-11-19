@@ -2,10 +2,12 @@ import { Button } from "@katoshop/ui/button";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { CartActionButton } from "../../../components/cart-action-button";
 import { CartLine } from "../../../components/cart-line";
 import { CartNoticesBar } from "../../../components/cart-notice";
 import { CartSummary } from "../../../components/cart-summary";
 import { CART_FLASH_COOKIE, CART_FLASH_MERGE_ADJUSTED, getCart } from "../../../lib/cart";
+import { CART_HEADING_ID } from "../../../lib/cart-messages";
 import { removeUnavailableAction } from "./actions";
 
 export const metadata: Metadata = {
@@ -30,7 +32,9 @@ export default async function CartPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-5xl">Carrinho</h1>
+      <h1 id={CART_HEADING_ID} tabIndex={-1} className="text-5xl focus:outline-none">
+        Carrinho
+      </h1>
       <CartNoticesBar mergeAdjusted={mergeAdjusted} itemNotices={itemNotices} />
 
       {view.items.length === 0 ? (
@@ -44,11 +48,11 @@ export default async function CartPage() {
         <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <section aria-label="Itens do carrinho">
             {hasUnavailable && (
-              <form action={removeUnavailableAction} className="flex justify-end">
-                <Button type="submit" variant="ghost">
+              <div className="flex justify-end">
+                <CartActionButton action={removeUnavailableAction} variant="ghost">
                   Limpar indisponíveis
-                </Button>
-              </form>
+                </CartActionButton>
+              </div>
             )}
             <ul className="border-t border-ks-border">
               {view.items.map((item) => (

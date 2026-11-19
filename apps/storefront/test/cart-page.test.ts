@@ -265,11 +265,13 @@ describe("updateQuantityAction e removeItemAction", () => {
   });
 });
 
-describe("ações sem estado", () => {
+describe("ações de botão (useActionState)", () => {
   it("removeUnavailableAction chama o DELETE dos indisponíveis", async () => {
     mocks.cartDelete.mockResolvedValue(ok(cartOut()));
 
-    await actions.removeUnavailableAction();
+    await expect(actions.removeUnavailableAction()).resolves.toEqual({
+      ok: true,
+    });
 
     expect(mocks.cartDelete).toHaveBeenCalledWith(
       "/v1/cart/items/unavailable",
@@ -281,30 +283,178 @@ describe("ações sem estado", () => {
   it("removeCouponAction chama o DELETE do cupom", async () => {
     mocks.cartDelete.mockResolvedValue(ok(cartOut()));
 
-    await actions.removeCouponAction();
+    await expect(actions.removeCouponAction()).resolves.toEqual({ ok: true });
 
     expect(mocks.cartDelete).toHaveBeenCalledWith("/v1/cart/coupon", expect.anything());
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/carrinho");
+  });
+
+  it.each([
+    ["removeUnavailableAction", () => mocks.cartDelete],
+    ["removeCouponAction", () => mocks.cartDelete],
+    ["ackNoticesAction", () => mocks.cartPost],
+  ] as const)("%s com falha devolve a mensagem para o role=status", async (name, call) => {
+    call().mockRejectedValue(new TypeError("fetch failed"));
+
+    const state = await actions[name]();
+
+    expect(state).toEqual({
+      ok: false,
+      message: "Não foi possível atualizar o carrinho agora. Tente de novo em instantes.",
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/carrinho");
+  });
+
+  it("concorrência mostra a mensagem do cart", async () => {
+    mocks.cartDelete.mockResolvedValue(problem(409, { code: "cart.cart.concurrent_update" }));
+
+    const state = await actions.removeCouponAction();
+
+    expect(state).toEqual({
+      ok: false,
+      message: "Seu carrinho mudou em outra aba. Tente de novo.",
+    });
   });
 
   it("ackNoticesAction limpa os avisos e o flash do merge", async () => {
     mocks.jar.set(CART_FLASH_COOKIE, { value: "merge_adjusted" });
     mocks.cartPost.mockResolvedValue(ok(cartOut()));
 
-    await actions.ackNoticesAction();
+    await expect(actions.ackNoticesAction()).resolves.toEqual({ ok: true });
 
     expect(mocks.cartPost).toHaveBeenCalledWith("/v1/cart/notices/ack", expect.anything());
     expect(mocks.jar.has(CART_FLASH_COOKIE)).toBe(false);
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/carrinho");
   });
 
-  it("ackNoticesAction com o cart fora ainda limpa o flash e não lança", async () => {
+  it("ackNoticesAction com o cart fora ainda limpa o flash", async () => {
     mocks.jar.set(CART_FLASH_COOKIE, { value: "merge_adjusted" });
     mocks.cartPost.mockRejectedValue(new TypeError("fetch failed"));
 
-    await expect(actions.ackNoticesAction()).resolves.toBeUndefined();
+    const state = await actions.ackNoticesAction();
 
+    expect(state?.ok).toBe(false);
     expect(mocks.jar.has(CART_FLASH_COOKIE)).toBe(false);
+  });
+});
+
+type RenderedForm = { html: string; fields: Record<string, string> };
+
+/** Os formulários do HTML renderizado com os campos que o navegador enviaria (inputs nomeados). */
+function formsOf(html: string): RenderedForm[] {
+  return [...html.matchAll(/<form[^>]*>([\s\S]*?)<\/form>/g)].map(([whole, inner = ""]) => {
+    const fields: Record<string, string> = {};
+    for (const [input] of inner.matchAll(/<input[^>]*>/g)) {
+      const name = /\sname="([^"]*)"/.exec(input)?.[1];
+      const value = /\svalue="([^"]*)"/.exec(input)?.[1] ?? "";
+      if (name) fields[name] = value;
+    }
+    return { html: whole, fields };
+  });
+}
+
+function formWith(forms: RenderedForm[], marker: string): RenderedForm {
+  const found = forms.find((f) => f.html.includes(marker));
+  if (!found) throw new Error(`nenhum formulário com ${marker}`);
+  return found;
+}
+
+describe("formulários da linha (o que o navegador envia)", () => {
+  async function lineForms() {
+    mocks.cartGet.mockResolvedValue(ok(cartOut({ items: [item({ quantity: 2, available: 5 })] })));
+    return formsOf(await renderPage());
+  }
+
+  it("− e + ficam em formulários próprios com variant_id e a quantidade-alvo em inputs", async () => {
+    const forms = await lineForms();
+
+    expect(formWith(forms, 'aria-label="Diminuir quantidade"').fields).toMatchObject({
+      variant_id: VARIANT,
+      quantity: "1",
+    });
+    expect(formWith(forms, 'aria-label="Aumentar quantidade"').fields).toMatchObject({
+      variant_id: VARIANT,
+      quantity: "3",
+    });
+  });
+
+  it("os botões não dependem de name/value do submitter", async () => {
+    const forms = await lineForms();
+    for (const marker of ['aria-label="Diminuir quantidade"', 'aria-label="Aumentar quantidade"']) {
+      const button = /<button[^>]*>/.exec(formWith(forms, marker).html)?.[0] ?? "";
+      expect(button).not.toMatch(/\sname="quantity"/);
+    }
+  });
+
+  it("o FormData do + chega ao updateQuantityAction com a quantidade", async () => {
+    const forms = await lineForms();
+    mocks.cartPatch.mockResolvedValue(ok(cartOut()));
+
+    const state = await actions.updateQuantityAction(
+      null,
+      form(formWith(forms, 'aria-label="Aumentar quantidade"').fields),
+    );
+
+    expect(state?.ok).toBe(true);
+    expect(mocks.cartPatch).toHaveBeenCalledWith(
+      "/v1/cart/items/{variant_id}",
+      expect.objectContaining({
+        params: { path: { variant_id: VARIANT } },
+        body: { quantity: 3 },
+      }),
+    );
+  });
+
+  it("Remover fica num formulário separado e chega ao removeItemAction", async () => {
+    const forms = await lineForms();
+    const remove = formWith(forms, "Remover");
+    expect(remove.fields.quantity).toBeUndefined();
+    mocks.cartDelete.mockResolvedValue(ok(cartOut()));
+
+    await actions.removeItemAction(null, form(remove.fields));
+
+    expect(mocks.cartDelete).toHaveBeenCalledWith(
+      "/v1/cart/items/{variant_id}",
+      expect.objectContaining({ params: { path: { variant_id: VARIANT } } }),
+    );
+  });
+
+  it("a quantidade exibida tem nome acessível", async () => {
+    mocks.cartGet.mockResolvedValue(ok(cartOut({ items: [item()] })));
+
+    expect(await renderPage()).toMatch(/<output[^>]*aria-label="Quantidade"[^>]*>2<\/output>/);
+  });
+
+  it("o erro volta com a versão da linha enviada, para sumir quando a linha muda", async () => {
+    const forms = await lineForms();
+    const fields = formWith(forms, 'aria-label="Aumentar quantidade"').fields;
+    expect(fields.line_version).toBeTruthy();
+    mocks.cartPatch.mockResolvedValue(
+      problem(422, { code: "cart.item.quantity_exceeds_stock", max: 2 }),
+    );
+
+    const state = await actions.updateQuantityAction(null, form(fields));
+
+    expect(state).toMatchObject({ ok: false, version: fields.line_version });
+  });
+
+  it("ações de botão do carrinho mostram o erro num role=status", async () => {
+    mocks.jar.set(CART_FLASH_COOKIE, { value: "merge_adjusted" });
+    mocks.cartGet.mockResolvedValue(
+      ok(
+        cartOut({
+          items: [item(), item({ variant_id: OTHER, unavailable: true, available: 0 })],
+          checkout_blocked: true,
+          coupon: { code: "VERAO", valid: true, reason: null, min_order_cents: null },
+        }),
+      ),
+    );
+
+    const forms = formsOf(await renderPage());
+
+    for (const marker of ["Entendi", "Limpar indisponíveis", "Remover cupom"]) {
+      expect(formWith(forms, marker).html).toContain('role="status"');
+    }
   });
 });
 

@@ -51,3 +51,26 @@ export function messageForCoupon(
 
 /** Teto por SKU do cart (spec §4.3); o botão + respeita também o estoque da linha. */
 export const MAX_QUANTITY_PER_ITEM = 20;
+
+type LineSnapshot = Pick<
+  CartComponents["schemas"]["ItemOut"],
+  "quantity" | "available" | "unavailable" | "unit_price_cents" | "notice"
+>;
+
+/**
+ * Versão visível de uma linha do carrinho. O formulário envia a versão, a action a devolve junto
+ * com o erro, e a linha só mostra o erro enquanto a versão for a mesma: depois que o carrinho
+ * muda (outra ação, outra aba, evento do catálogo), o erro antigo some.
+ */
+export function lineVersion(item: LineSnapshot): string {
+  return [
+    item.quantity,
+    item.available,
+    item.unavailable ? 1 : 0,
+    item.unit_price_cents,
+    item.notice?.code ?? "",
+  ].join(":");
+}
+
+/** Título do /carrinho, que recebe o foco quando uma linha some depois de "Remover". */
+export const CART_HEADING_ID = "carrinho-titulo";

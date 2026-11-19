@@ -4,6 +4,7 @@ import { formatBRL } from "@katoshop/ui/money";
 import { X } from "lucide-react";
 import { removeCouponAction } from "../app/(shop)/carrinho/actions";
 import { messageForCoupon } from "../lib/cart-messages";
+import { CartActionButton } from "./cart-action-button";
 import { CouponForm } from "./coupon-form";
 
 type CartOut = CartComponents["schemas"]["CartOut"];
@@ -35,15 +36,14 @@ export function CartSummary({ cart }: { cart: CartOut }) {
             <p className="text-sm">
               Cupom <span className="font-mono font-semibold">{coupon.code}</span>
             </p>
-            <form action={removeCouponAction}>
-              <button
-                type="submit"
-                className="inline-flex h-8 items-center gap-1 rounded-[var(--radius)] px-2 text-xs font-semibold uppercase tracking-wide text-ks-muted transition-colors duration-[var(--duration-fast)] hover:bg-ks-fg/10 hover:text-ks-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ks-focus"
-              >
-                <X aria-hidden className="size-4" />
-                Remover cupom
-              </button>
-            </form>
+            <CartActionButton
+              action={removeCouponAction}
+              variant="ghost"
+              className="h-8 px-2 text-xs text-ks-muted hover:text-ks-fg"
+            >
+              <X aria-hidden className="size-4" />
+              Remover cupom
+            </CartActionButton>
           </div>
           {!coupon.valid && (
             <p className="text-sm text-red-400">

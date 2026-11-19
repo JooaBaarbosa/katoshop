@@ -1,6 +1,6 @@
-import { Button } from "@katoshop/ui/button";
 import { Info } from "lucide-react";
 import { ackNoticesAction } from "../app/(shop)/carrinho/actions";
+import { CartActionButton } from "./cart-action-button";
 
 /** Aviso de um item (preço, quantidade ou indisponível), sempre com os dados reais do cart. */
 export function CartNotice({ message }: { message: string }) {
@@ -25,19 +25,12 @@ export function CartNoticesBar({
 }) {
   if (!mergeAdjusted && !itemNotices) return null;
   return (
-    <div
-      role="status"
-      className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-ks-border bg-ks-surface px-4 py-3"
-    >
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-ks-border bg-ks-surface px-4 py-3">
       <div className="space-y-1 text-sm">
         {mergeAdjusted && <p>Alguns itens foram ajustados ao juntar seu carrinho.</p>}
         {itemNotices && <p>Alguns itens mudaram desde que você os adicionou. Veja os avisos.</p>}
       </div>
-      <form action={ackNoticesAction}>
-        <Button type="submit" variant="secondary">
-          Entendi
-        </Button>
-      </form>
+      <CartActionButton action={ackNoticesAction}>Entendi</CartActionButton>
     </div>
   );
 }

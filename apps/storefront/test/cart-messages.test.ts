@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { messageForCoupon, messageForNotice } from "../lib/cart-messages";
+import { lineVersion, messageForCoupon, messageForNotice } from "../lib/cart-messages";
 
 // NBSP do Intl.NumberFormat (escrito por código: o lint recusa o caractere literal)
 const NBSP = String.fromCharCode(0xa0);
@@ -75,5 +75,36 @@ describe("messageForCoupon", () => {
   it("motivo desconhecido ou ausente cai numa mensagem genérica", () => {
     expect(messageForCoupon("promotions.coupon.algo_novo")).toBe("Este cupom não vale agora.");
     expect(messageForCoupon(null)).toBe("Este cupom não vale agora.");
+  });
+});
+
+describe("lineVersion", () => {
+  const line = {
+    quantity: 2,
+    available: 5,
+    unavailable: false,
+    unit_price_cents: 14990,
+    notice: null,
+  };
+
+  it("é estável para a mesma linha", () => {
+    expect(lineVersion(line)).toBe(lineVersion({ ...line }));
+  });
+
+  it.each([
+    { quantity: 3 },
+    { available: 2 },
+    { unavailable: true },
+    { unit_price_cents: 12990 },
+    {
+      notice: {
+        code: "price_changed" as const,
+        old_price_cents: 14990,
+        new_price_cents: 12990,
+        quantity: null,
+      },
+    },
+  ])("muda quando a linha muda (%o), e o erro antigo some", (change) => {
+    expect(lineVersion({ ...line, ...change })).not.toBe(lineVersion(line));
   });
 });

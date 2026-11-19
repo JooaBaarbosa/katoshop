@@ -46,7 +46,8 @@ def make_item(variant_id: str | None = None, **overrides: object) -> CartItem:
         category_slug="camisetas",
         collection_slugs=["verao"],
         quantity=1,
-        variant_version=1,
+        price_version=1,
+        stock_version=1,
     )
     return replace(item, **overrides)  # pyright: ignore[reportArgumentType]
 
@@ -405,6 +406,21 @@ def test_item_json_ignores_unknown_and_defaults_missing_optional_keys() -> None:
     )
 
     assert item_from_json(raw) == item
+
+
+def test_item_json_keeps_per_type_watermarks() -> None:
+    item = make_item(price_version=3, stock_version=7)
+    data = json.loads(item_to_json(item))
+    assert (data["price_version"], data["stock_version"], data["item_version"]) == (3, 7, 7)
+    assert item_from_json(item_to_json(item)) == item
+
+
+def test_item_json_without_watermarks_defaults_both_to_item_version() -> None:
+    # Item gravado antes de S11: só `item_version`.
+    data = json.loads(item_to_json(make_item(price_version=5, stock_version=5)))
+    del data["price_version"], data["stock_version"]
+    item = item_from_json(json.dumps(data))
+    assert (item.price_version, item.stock_version) == (5, 5)
 
 
 # ------------------------------------------------------------------------------ merge_guest

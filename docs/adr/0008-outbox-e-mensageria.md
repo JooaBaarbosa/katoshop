@@ -68,15 +68,23 @@ o broker pode reentregar. O consumidor do cart é idempotente em três camadas:
 - **`processed_events`:** uma chave `processed_events:{event_id}` no Redis com TTL de 7 dias. Evento já visto recebe
   ack sem efeito. A marcação acontece depois de atualizar todos os carrinhos afetados, então uma falha no meio
   reaplica o evento inteiro.
-- **Guarda de versão:** preço e estoque só são aplicados se `data.version` for maior que a versão guardada no item.
-  Evento repetido ou fora de ordem não volta o item para um estado antigo.
+- **Guarda de versão por tipo (ruling S11):** o item guarda duas marcas d'água, `price_version` e `stock_version`.
+  Um `price_changed` só é aplicado se `data.version` for maior que `price_version`, e um `stock_changed` só se for
+  maior que `stock_version`. Evento repetido ou fora de ordem do mesmo tipo não volta o item para um estado antigo. O
+  snapshot lido do catalog ao adicionar o item começa as duas marcas na versão atual da variante.
 - **Arquivado permanente (rulings S7 e S10):** a marca `archived` do item é *sticky*. Eventos de preço e estoque nunca
   reativam um item arquivado, porque o catalog continua emitindo `stock_changed` de produto arquivado e o evento de
   arquivamento não tem versão. Só uma nova inclusão de um produto ativo limpa a marca, e no merge do login a linha fica
   arquivada se qualquer um dos lados estiver arquivado.
 
-A ordem é por agregado, no melhor esforço: há uma fila por consumidor, e a versão cobre a reordenação causada por
-retry.
+A ordem é por agregado, no melhor esforço: há uma fila por consumidor, mas o cart consome com prefetch 10 e as filas
+de retry devolvem mensagens fora da ordem original. Como o catalog incrementa uma única `variants.version` para preço e
+estoque, uma marca d'água compartilhada descartaria um `price_changed` (versão 2) que chegasse depois de um
+`stock_changed` (versão 3) e o carrinho ficaria com o preço antigo. Por isso a guarda é por tipo: cada evento só
+compete com eventos do próprio tipo. O JSON do item continua gravando `item_version` (a maior das duas marcas), e um
+item gravado antes de S11, que só tem `item_version`, começa as duas marcas nesse valor. No merge do login, o preço vem
+da cópia com `price_version` maior e o estoque (disponível, indisponível, quantidade, aviso) da cópia com
+`stock_version` maior.
 
 ## Consequências
 

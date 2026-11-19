@@ -62,7 +62,8 @@ def make_item(variant_id: str, **overrides: Any) -> CartItem:
         category_slug="camisetas",
         collection_slugs=[],
         quantity=2,
-        variant_version=1,
+        price_version=1,
+        stock_version=1,
     )
     return replace(item, **overrides)
 
@@ -160,7 +161,7 @@ async def test_duplicate_event_applied_once(repo: RedisCartRepository) -> None:
 
     # O produto volta a ficar ativo e o cliente adiciona de novo (snapshot novo e ativo).
     def readd(cart: Cart) -> None:
-        add_item(cart, make_item(v, variant_version=3, quantity=0), 1, **LIMITS)
+        add_item(cart, make_item(v, price_version=3, stock_version=3, quantity=0), 1, **LIMITS)
 
     await repo.mutate(cart_id, readd)
     await handle_catalog_event(event, repo)  # reentrega do mesmo evento
@@ -172,7 +173,7 @@ async def test_duplicate_event_applied_once(repo: RedisCartRepository) -> None:
 
 async def test_stale_version_ignored(repo: RedisCartRepository) -> None:
     v = vid()
-    cart_id = await guest_with(repo, make_item(v, variant_version=5))
+    cart_id = await guest_with(repo, make_item(v, price_version=5, stock_version=5))
     before = await repo.get(cart_id)
     assert before is not None
 
@@ -182,6 +183,22 @@ async def test_stale_version_ignored(repo: RedisCartRepository) -> None:
     after = await repo.get(cart_id)
     assert after is not None
     assert after == before  # nada gravado, nem a versão do carrinho
+
+
+@pytest.mark.parametrize("stock_first", [True, False])
+async def test_price_and_stock_events_apply_in_either_order(
+    repo: RedisCartRepository, stock_first: bool
+) -> None:
+    # S11: o catalog usa uma versão só para os dois tipos; a fila pode inverter a ordem.
+    v = vid()
+    cart_id = await guest_with(repo, make_item(v, quantity=5))
+    events = [price_event(v, 5990, 2), stock_event(v, 3, 3)]
+    for event in reversed(events) if stock_first else events:
+        await handle_catalog_event(event, repo)
+
+    item = await line(repo, cart_id, v)
+    assert (item.unit_price_cents, item.available, item.quantity) == (5990, 3, 3)
+    assert (item.price_version, item.stock_version) == (2, 3)
 
 
 async def test_archived_marks_unavailable(repo: RedisCartRepository) -> None:

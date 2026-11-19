@@ -38,14 +38,23 @@ class CartItem:
     category_slug: str
     collection_slugs: list[str]
     quantity: int
-    # Versão da variante no catalog (data.version dos eventos); eventos com versão <= são antigos.
-    variant_version: int
+    # Marcas d'água por tipo de evento (S11): o catalog usa uma única `variants.version` para
+    # preço e estoque, e a entrega pode chegar fora de ordem. Cada tipo compara `data.version`
+    # só com a sua marca; um evento de estoque mais novo não descarta um de preço mais antigo.
+    # O snapshot do catalog (add_item) começa as duas na versão lida.
+    price_version: int
+    stock_version: int
     unavailable: bool = False
     # Produto arquivado: sticky, só um snapshot novo e ativo (add_item) limpa.
     archived: bool = False
     # Último preço que o cliente viu, guardado quando o preço muda com o item indisponível.
     seen_price_cents: int | None = None
     notice: Notice | None = None
+
+    @property
+    def variant_version(self) -> int:
+        """Maior versão da variante já aplicada ao item (gravada como `item_version`)."""
+        return max(self.price_version, self.stock_version)
 
 
 @dataclass
@@ -98,9 +107,9 @@ def set_quantity(cart: Cart, variant_id: str, quantity: int, *, max_qty: int) ->
 
 
 def apply_price_changed(item: CartItem, new_price_cents: int, version: int) -> bool:
-    if version <= item.variant_version:
+    if version <= item.price_version:
         return False
-    item.variant_version = version
+    item.price_version = version
     if new_price_cents == item.unit_price_cents:
         return True
     if item.unavailable:
@@ -116,9 +125,9 @@ def apply_price_changed(item: CartItem, new_price_cents: int, version: int) -> b
 
 
 def apply_stock_changed(item: CartItem, available: int, version: int) -> bool:
-    if version <= item.variant_version:
+    if version <= item.stock_version:
         return False
-    item.variant_version = version
+    item.stock_version = version
     item.available = available
     if item.archived:
         return True
@@ -149,6 +158,33 @@ def apply_archived(item: CartItem) -> bool:
     return True
 
 
+def _fresher(a: CartItem, g: CartItem) -> CartItem:
+    """Junta duas cópias da mesma linha campo a campo pelas marcas d'água (S11).
+
+    Estoque (`available`, `unavailable`, quantidade, avisos) vem da cópia com `stock_version`
+    maior; preço (`unit_price_cents`) da com `price_version` maior. Empate fica com a conta
+    (`a`). Quando as fontes diferem, o aviso de estoque prevalece; sem aviso de estoque, vale o
+    `price_changed` da fonte do preço. Linha indisponível guarda o preço que o cliente viu.
+    """
+    stock = g if g.stock_version > a.stock_version else a
+    price = g if g.price_version > a.price_version else a
+    if stock is price:
+        return stock
+    notice = stock.notice
+    if notice is None or notice.code == "price_changed":
+        notice = price.notice if price.notice and price.notice.code == "price_changed" else None
+    seen = stock.seen_price_cents
+    if stock.unavailable and seen is None and stock.unit_price_cents != price.unit_price_cents:
+        seen = stock.unit_price_cents
+    return replace(
+        stock,
+        unit_price_cents=price.unit_price_cents,
+        price_version=price.price_version,
+        seen_price_cents=seen,
+        notice=notice,
+    )
+
+
 @dataclass
 class MergeResult:
     reduced: list[str] = field(default_factory=list)  # quantidade reduzida (aviso quantity_reduced)
@@ -177,7 +213,7 @@ def merge(account: Cart, guest: Cart, *, max_lines: int, max_qty: int) -> MergeR
                 g.notice = Notice("quantity_reduced", quantity=max_qty)
                 result.reduced.append(variant_id)
             continue
-        fresh = g if g.variant_version > a.variant_version else a
+        fresh = _fresher(a, g)
         if a.archived or g.archived:
             # Arquivado é sticky também no merge (S10): um visitante que perdeu o evento de
             # arquivamento não pode reviver a linha. Os demais campos vêm do mais novo.

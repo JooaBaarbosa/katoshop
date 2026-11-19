@@ -21,6 +21,7 @@ def _snapshot(data: dict[str, Any]) -> CartItem:
     product_status = str_value(data["product_status"])
     active = bool_value(data["active"])
     available = int_value(data["available"])
+    version = int_value(data["version"])
     image_url = data["image_url"]
     if image_url is not None:
         image_url = str_value(image_url)
@@ -41,7 +42,9 @@ def _snapshot(data: dict[str, Any]) -> CartItem:
         category_slug=str_value(data["category_slug"]),
         collection_slugs=[str_value(slug) for slug in collections],
         quantity=0,
-        variant_version=int_value(data["version"]),
+        # Snapshot lido agora: as duas marcas d'água começam na versão atual (S11).
+        price_version=version,
+        stock_version=version,
         unavailable=(not active or product_status != "active" or available == 0),
         archived=product_status == "archived",
     )

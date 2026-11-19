@@ -55,7 +55,8 @@ def snapshot(variant_id: str, *, price: int = 5000, available: int = 10, **over:
         category_slug="camisetas",
         collection_slugs=["verao"],
         quantity=0,
-        variant_version=1,
+        price_version=1,
+        stock_version=1,
     )
     return replace(item, **over)
 

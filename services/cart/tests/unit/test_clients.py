@@ -177,7 +177,8 @@ def _item(variant_id: str = VID, **over: Any) -> CartItem:
         category_slug="camisetas",
         collection_slugs=["verao"],
         quantity=2,
-        variant_version=4,
+        price_version=4,
+        stock_version=4,
     )
     return replace(base, **over)
 

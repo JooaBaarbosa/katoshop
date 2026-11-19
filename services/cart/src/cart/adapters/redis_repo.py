@@ -75,7 +75,12 @@ async def _backoff(attempt: int) -> None:
 
 
 def item_to_json(item: CartItem) -> str:
-    """JSON com chaves estáveis; `item_version` guarda `variant_version` (spec §4.1)."""
+    """JSON com chaves estáveis (spec §4.1).
+
+    `price_version` e `stock_version` são as marcas d'água por tipo de evento (S11);
+    `item_version` continua sendo gravado com a maior das duas (`variant_version`) para que uma
+    versão anterior do cart, num rollback, ainda leia o item.
+    """
     notice = item.notice
     data: dict[str, Any] = {
         "variant_id": item.variant_id,
@@ -92,6 +97,8 @@ def item_to_json(item: CartItem) -> str:
         "collection_slugs": item.collection_slugs,
         "quantity": item.quantity,
         "item_version": item.variant_version,
+        "price_version": item.price_version,
+        "stock_version": item.stock_version,
         "unavailable": item.unavailable,
         "archived": item.archived,
         "seen_price_cents": item.seen_price_cents,
@@ -108,8 +115,12 @@ def item_to_json(item: CartItem) -> str:
 
 
 def item_from_json(raw: bytes | str) -> CartItem:
-    """Lê um item; chaves desconhecidas são ignoradas e as opcionais ausentes têm padrão."""
+    """Lê um item; chaves desconhecidas são ignoradas e as opcionais ausentes têm padrão.
+
+    Itens gravados antes de S11 só têm `item_version`: as duas marcas d'água partem dela.
+    """
     data = json.loads(raw)
+    item_version = data["item_version"]
     notice_data = data.get("notice")
     notice = (
         None
@@ -135,7 +146,8 @@ def item_from_json(raw: bytes | str) -> CartItem:
         category_slug=data["category_slug"],
         collection_slugs=list(data.get("collection_slugs", [])),
         quantity=data["quantity"],
-        variant_version=data["item_version"],
+        price_version=data.get("price_version", item_version),
+        stock_version=data.get("stock_version", item_version),
         unavailable=data.get("unavailable", False),
         archived=data.get("archived", False),
         seen_price_cents=data.get("seen_price_cents"),

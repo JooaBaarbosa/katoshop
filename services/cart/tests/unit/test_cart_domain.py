@@ -40,7 +40,8 @@ def snap(
         category_slug="camisetas",
         collection_slugs=[],
         quantity=quantity,
-        variant_version=version,
+        price_version=version,
+        stock_version=version,
         unavailable=unavailable,
     )
 
@@ -475,3 +476,70 @@ def test_merge_archived_guest_archives_fresher_account_line() -> None:
     assert line.notice == Notice("unavailable")
     assert line.variant_version == 8
     assert line.quantity == 3
+
+
+# ------------------------------------------------------------------------------ S11
+
+
+def test_price_event_older_than_applied_stock_event_is_applied() -> None:
+    # O catalog usa uma versão só: estoque v3 chegou antes do preço v2.
+    item = snap(quantity=1, price=1000, available=10, version=1)
+    assert apply_stock_changed(item, 8, 3) is True
+    assert apply_price_changed(item, 1500, 2) is True
+    assert item.unit_price_cents == 1500
+    assert item.available == 8
+    assert (item.price_version, item.stock_version, item.variant_version) == (2, 3, 3)
+    assert item.notice == Notice("price_changed", 1000, 1500, None)
+
+
+def test_stock_event_older_than_applied_price_event_is_applied() -> None:
+    item = snap(quantity=5, price=1000, available=10, version=1)
+    assert apply_price_changed(item, 1500, 3) is True
+    assert apply_stock_changed(item, 2, 2) is True
+    assert (item.unit_price_cents, item.available, item.quantity) == (1500, 2, 2)
+    assert (item.price_version, item.stock_version) == (3, 2)
+
+
+def test_each_watermark_still_drops_its_own_stale_events() -> None:
+    item = snap(quantity=1, price=1000, available=10, version=1)
+    apply_stock_changed(item, 8, 3)
+    apply_price_changed(item, 1500, 2)
+    assert apply_price_changed(item, 1700, 2) is False
+    assert apply_stock_changed(item, 1, 3) is False
+    assert (item.unit_price_cents, item.available) == (1500, 8)
+
+
+def test_snapshot_sets_both_watermarks() -> None:
+    c = cart(snap(quantity=1, version=1))
+    apply_stock_changed(c.items["v1"], 8, 4)
+    add_item(c, snap(version=6), 1, **LIMITS)
+    assert (c.items["v1"].price_version, c.items["v1"].stock_version) == (6, 6)
+
+
+def test_merge_takes_price_and_stock_from_the_fresher_copy_of_each() -> None:
+    a = snap(quantity=1, price=1000, available=10, version=1)
+    apply_price_changed(a, 1400, 5)  # conta viu o preço mais novo
+    a.notice = None
+    g = snap(quantity=1, price=1000, available=10, version=1)
+    apply_stock_changed(g, 3, 6)  # visitante viu o estoque mais novo
+    account = cart(a, owner="user:u")
+    merge(account, cart(g), **LIMITS)
+    line = account.items["v1"]
+    assert (line.unit_price_cents, line.price_version) == (1400, 5)
+    assert (line.available, line.stock_version) == (3, 6)
+    assert line.quantity == 2
+
+
+def test_merge_unavailable_stock_copy_keeps_seen_price_with_fresher_price() -> None:
+    a = snap(quantity=1, price=1000, version=1)
+    apply_stock_changed(a, 0, 4)  # conta: indisponível, estoque mais novo
+    g = snap(quantity=1, price=1000, version=1)
+    apply_price_changed(g, 1300, 5)  # visitante: preço mais novo
+    account = cart(a, owner="user:u")
+    merge(account, cart(g), **LIMITS)
+    line = account.items["v1"]
+    assert line.unavailable is True
+    assert line.notice == Notice("unavailable")
+    assert (line.unit_price_cents, line.seen_price_cents) == (1300, 1000)
+    apply_stock_changed(line, 5, 6)
+    assert line.notice == Notice("price_changed", 1000, 1300, None)

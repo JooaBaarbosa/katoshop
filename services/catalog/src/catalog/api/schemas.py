@@ -536,6 +536,7 @@ class CategoryBrief(BaseModel):
 
 
 class PublicVariantOut(BaseModel):
+    id: uuid.UUID
     sku: str
     color_code: str
     size_code: str
@@ -579,6 +580,7 @@ class ProductDetailOut(BaseModel):
             sizes=[SizeOut(code=s.code, label=s.label) for s in p.sizes],
             variants=[
                 PublicVariantOut(
+                    id=v.id,
                     sku=v.sku,
                     color_code=v.color_code,
                     size_code=v.size_code,

@@ -1180,6 +1180,11 @@ export interface components {
             available: boolean;
             /** Color Code */
             color_code: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Price Cents */
             price_cents: number;
             /** Size Code */

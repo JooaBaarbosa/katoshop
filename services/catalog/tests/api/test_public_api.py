@@ -375,7 +375,10 @@ async def test_detail(
     assert variants[("PRT", "G")]["available"] is False
     assert variants[("CNZ", "M")]["price_cents"] == 19900
     assert variants[("PRT", "M")]["price_cents"] == 24900
+    # O id é o que a loja envia ao carrinho (POST /v1/cart/items).
+    assert variants[("CNZ", "M")]["id"] == cnz_m["id"]
     assert set(variants[("PRT", "M")]) == {
+        "id",
         "sku",
         "color_code",
         "size_code",

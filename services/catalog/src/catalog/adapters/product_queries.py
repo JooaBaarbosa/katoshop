@@ -165,6 +165,7 @@ class Facets:
 
 @dataclass(frozen=True)
 class PublicVariant:
+    id: uuid.UUID
     sku: str
     color_code: str
     size_code: str
@@ -523,6 +524,7 @@ async def product_detail(session: AsyncSession, slug: str) -> ProductDetail | No
         sizes=[SizeRef(code, label) for code, label in sizes],
         variants=[
             PublicVariant(
+                id=row.Variant.id,
                 sku=row.Variant.sku,
                 color_code=row.Variant.color_code,
                 size_code=row.Variant.size_code,

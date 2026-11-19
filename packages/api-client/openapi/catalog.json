@@ -2069,6 +2069,11 @@
             "title": "Color Code",
             "type": "string"
           },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
           "price_cents": {
             "title": "Price Cents",
             "type": "integer"
@@ -2083,6 +2088,7 @@
           }
         },
         "required": [
+          "id",
           "sku",
           "color_code",
           "size_code",

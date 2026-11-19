@@ -1,6 +1,6 @@
 import { ApiProblem } from "@katoshop/api-client";
 
-/** Textos pt-BR dos códigos de problema do catálogo e dos blockers de publicação. */
+/** Textos pt-BR dos códigos de problema do catálogo, dos cupons e dos blockers de publicação. */
 const MESSAGES: Record<string, string> = {
   "catalog.product.version_conflict":
     "Este produto foi alterado por outra pessoa. Recarregue para ver a versão atual.",
@@ -32,7 +32,16 @@ const MESSAGES: Record<string, string> = {
   "catalog.collection.not_found": "Coleção não encontrada.",
   "catalog.pagination.invalid_cursor": "A página pedida não existe mais. Volte ao início da lista.",
   "catalog.search.query_too_long": "A busca aceita no máximo 200 caracteres.",
-  "request.validation": "Confira os campos destacados.",
+  "promotions.coupon.code_taken": "Já existe um cupom com este código.",
+  "promotions.coupon.version_conflict":
+    "Este cupom foi alterado por outra pessoa. Recarregue para ver a versão atual.",
+  "promotions.coupon.has_redemptions":
+    "Este cupom já foi usado e não pode ser excluído. Desative em vez disso.",
+  "promotions.coupon.code_immutable": "O código do cupom não pode ser alterado.",
+  "promotions.coupon.not_found": "Cupom não encontrado.",
+  "promotions.pagination.invalid_cursor":
+    "A página pedida não existe mais. Mostrando o início da lista.",
+  "request.validation":"Confira os campos destacados.",
   "http.429": "Muitas ações seguidas. Aguarde um instante e tente de novo.",
   // blockers de publicação (errors.product do 422 catalog.product.not_publishable)
   no_active_variant: "Ative pelo menos uma variante de cor e tamanho.",

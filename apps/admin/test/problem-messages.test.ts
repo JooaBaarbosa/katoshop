@@ -16,6 +16,15 @@ describe("messageFor", () => {
     ["catalog.image.too_large", "A imagem passa de 8 MB."],
     ["catalog.image.unsupported_type", "Envie JPG, PNG ou WebP."],
     ["catalog.category.in_use", "Há produtos nesta categoria."],
+    ["promotions.coupon.code_taken", "Já existe um cupom com este código."],
+    [
+      "promotions.coupon.version_conflict",
+      "Este cupom foi alterado por outra pessoa. Recarregue para ver a versão atual.",
+    ],
+    [
+      "promotions.coupon.has_redemptions",
+      "Este cupom já foi usado e não pode ser excluído. Desative em vez disso.",
+    ],
   ])("%s tem o texto exato do brief", (code, text) => {
     expect(messageFor(code)).toBe(text);
   });

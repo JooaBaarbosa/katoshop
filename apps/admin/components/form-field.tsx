@@ -5,14 +5,17 @@ type FormFieldProps = Omit<ComponentProps<"input">, "id" | "name"> & {
   name: string;
   label: string;
   error?: string | undefined;
+  hint?: string;
   /** Distingue ids quando o mesmo campo aparece em vários formulários da página. */
   idSuffix?: string;
 };
 
-/** Campo com <label> explícito; erro ligado por aria-invalid e aria-describedby. */
-export function FormField({ name, label, error, idSuffix = "", ...props }: FormFieldProps) {
+/** Campo com <label> explícito; dica e erro ligados por aria-invalid e aria-describedby. */
+export function FormField({ name, label, error, hint, idSuffix = "", ...props }: FormFieldProps) {
   const id = `field-${name}${idSuffix}`;
+  const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
+  const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
   return (
     <div className="space-y-2">
       <label htmlFor={id} className="block text-sm font-medium">
@@ -22,9 +25,14 @@ export function FormField({ name, label, error, idSuffix = "", ...props }: FormF
         id={id}
         name={name}
         aria-invalid={error ? true : undefined}
-        aria-describedby={errorId}
+        aria-describedby={describedBy}
         {...props}
       />
+      {hint && (
+        <p id={hintId} className="text-xs text-ks-muted">
+          {hint}
+        </p>
+      )}
       {error && (
         <p id={errorId} className="text-sm text-red-700">
           {error}

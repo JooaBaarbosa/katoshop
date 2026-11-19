@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { isActive, NAV_ITEMS } from "../lib/nav";
 
 describe("NAV_ITEMS", () => {
-  it("itens ativos da fatia 1 com destino", () => {
+  it("itens ativos com destino (Cupons chega na fatia 2)", () => {
     const active = NAV_ITEMS.filter((item) => item.href !== undefined).map((item) => item.label);
-    expect(active).toEqual(["Visão geral", "Produtos", "Categorias", "Coleções"]);
+    expect(active).toEqual(["Visão geral", "Produtos", "Categorias", "Coleções", "Cupons"]);
+    expect(NAV_ITEMS.find((item) => item.label === "Cupons")?.href).toBe("/cupons");
   });
 
   it("itens futuros desabilitados com a fatia em que chegam", () => {
@@ -13,7 +14,6 @@ describe("NAV_ITEMS", () => {
     );
     expect(disabled).toEqual([
       "Pedidos (Fatia 3)",
-      "Cupons (Fatia 2)",
       "Frete (Fatia 3)",
       "Clientes (Fatia 4)",
       "Vitrine (Fatia 4)",

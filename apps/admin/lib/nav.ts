@@ -26,7 +26,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: "Categorias", href: "/categorias", icon: "categories" },
   { label: "Coleções", href: "/colecoes", icon: "collections" },
   { label: "Pedidos", slice: "Fatia 3", icon: "orders" },
-  { label: "Cupons", slice: "Fatia 2", icon: "coupons" },
+  { label: "Cupons", href: "/cupons", icon: "coupons" },
   { label: "Frete", slice: "Fatia 3", icon: "shipping" },
   { label: "Clientes", slice: "Fatia 4", icon: "customers" },
   { label: "Vitrine", slice: "Fatia 4", icon: "storefront" },

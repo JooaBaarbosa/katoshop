@@ -150,9 +150,23 @@ services:
     image: redis:8.10.3-alpine
     restart: unless-stopped
     mem_limit: 256m
-    # AOF com fsync a cada segundo: um carrinho perde no máximo ~1 s de escrita num crash
+    # AOF com fsync a cada segundo: um carrinho perde no máximo ~1 s de escrita num crash.
+    # maxmemory abaixo do mem_limit (S13): cheio, o Redis expulsa só chaves com TTL, a de menor
+    # prazo primeiro (volatile-ttl): carrinhos de visitante, dedup de eventos e cache de
+    # desconto. Carrinho de cliente não tem TTL e nunca é expulso; sem nada a expulsar, a
+    # escrita falha (o cart responde cart.storage.unavailable) em vez de o container morrer.
     command:
-      ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--appendfsync",
+        "everysec",
+        "--maxmemory",
+        "200mb",
+        "--maxmemory-policy",
+        "volatile-ttl",
+      ]
     volumes:
       - redisdata:/data
     healthcheck:
@@ -174,10 +188,13 @@ services:
     environment:
       # o alias de rede do Traefik resolve o gateway de dentro do container
       API_URL: http://api.katoshop.localhost
+      # o BFF fala com o cart pela rede interna, fora do rate limit por IP do /cart público (S13)
+      CART_API_URL: ${CART_API_URL:-http://cart:8000}
       COOKIE_SECURE: "false"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       - traefik
+      - cart
     healthcheck:
       test:
         - CMD

@@ -904,6 +904,20 @@ async def test_redis_down_is_503_storage_unavailable(
         assert resp.json()["code"] == "cart.storage.unavailable"
 
 
+async def test_redis_out_of_memory_is_503_storage_unavailable(
+    api: httpx.AsyncClient, redis: Redis
+) -> None:
+    # S13: maxmemory sem nada a expulsar recusa a escrita (OOM); o cliente recebe 503.
+    await redis.config_set("maxmemory-policy", "noeviction")
+    await redis.config_set("maxmemory", 1)
+    try:
+        resp = await add(api, V1, 1)
+    finally:
+        await redis.config_set("maxmemory", 0)
+    assert resp.status_code == 503
+    assert resp.json()["code"] == "cart.storage.unavailable"
+
+
 def test_unstarted_app_creates_no_upstream_clients() -> None:
     app = create_app(CartSettings(client_secret="x"))  # noqa: S106
     for name in ("redis", "catalog", "promotions"):

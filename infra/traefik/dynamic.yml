@@ -45,10 +45,12 @@ http:
       service: catalog
       priority: 100
 
+    # S13: a loja chama o cart pela rede interna (CART_API_URL), então este router só atende
+    # clientes diretos da API e ganha o próprio limite por IP (cart-ratelimit).
     cart:
       rule: "Host(`api.katoshop.localhost`) && PathRegexp(`^/cart(/|$)`)"
       entryPoints: [web]
-      middlewares: [cart-body-limit, cart-strip]
+      middlewares: [cart-ratelimit, cart-body-limit, cart-strip]
       service: cart
       priority: 100
 
@@ -171,6 +173,18 @@ http:
       rateLimit:
         average: 10
         burst: 20
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 0
+
+    # API pública do carrinho (S13): 20 req/s em média, rajada de 40, por IP de origem. Folga
+    # para um cliente JSON real (uma tela do carrinho faz poucas chamadas por ação) e corta a
+    # criação em massa de carrinhos de visitante e a força bruta de cupom (PUT /v1/cart/coupon).
+    cart-ratelimit:
+      rateLimit:
+        average: 20
+        burst: 40
         period: 1s
         sourceCriterion:
           ipStrategy:

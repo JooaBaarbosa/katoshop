@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from opentelemetry import trace
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import OutOfMemoryError as RedisOutOfMemoryError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from starlette.responses import Response
 
@@ -67,3 +68,5 @@ def install_cart_error_handlers(app: FastAPI) -> None:
 
     app.add_exception_handler(RedisConnectionError, _storage_unavailable)
     app.add_exception_handler(RedisTimeoutError, _storage_unavailable)
+    # maxmemory sem chave com TTL a expulsar (S13): a escrita é recusada, o serviço segue de pé.
+    app.add_exception_handler(RedisOutOfMemoryError, _storage_unavailable)

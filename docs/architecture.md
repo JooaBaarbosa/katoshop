@@ -46,7 +46,10 @@ identity catalog   cart     orders   payments   shipping    promotions
 
 Hoje existem identity, catalog, cart e promotions. O estoque fica no catalog
 ([ADR 0004](adr/0004-estoque-no-catalog.md)). O cart não tem banco relacional: o carrinho vive no Redis, com AOF e
-volume próprio. O promotions tem o banco `promotions` no Postgres, com usuário dono `promotions_svc`. A contagem de usos
+volume próprio. O Redis tem `maxmemory 200mb` (abaixo do `mem_limit` de 256 MB) com `volatile-ttl` (ruling S13): cheio,
+expulsa só chaves com TTL (carrinhos de visitante, `processed_events` e cache de desconto), a de menor prazo primeiro.
+Carrinho de cliente não tem TTL e nunca é expulso; sem nada a expulsar, a escrita é recusada e o cart responde 503
+`cart.storage.unavailable`. O promotions tem o banco `promotions` no Postgres, com usuário dono `promotions_svc`. A contagem de usos
 do cupom (tabela `coupon_redemptions`) já existe, mas só é gravada no checkout da fatia 3.
 
 ## Regras de comunicação
@@ -100,6 +103,11 @@ Limite `auth-ratelimit`: 10 req/s em média, rajada de 20, por IP de origem. Ele
 
 Os demais `POST` da loja (formulários de Server Action sem JavaScript, como "Adicionar ao carrinho" e as ações do
 `/carrinho`) passam pelo `storefront-post-ratelimit`, com os mesmos parâmetros e balde próprio.
+
+O router público `/cart` tem o próprio `cart-ratelimit`: 20 req/s em média, rajada de 40, por IP de origem (ruling
+S13). Ele corta a criação em massa de carrinhos de visitante e a força bruta de cupom. O BFF da loja não passa por ele:
+fala com o cart pela rede interna (`CART_API_URL=http://cart:8000`), então os clientes da loja não dividem o balde do IP
+do container do Next (o problema do R20).
 
 Uploads de imagem passam por um limite de corpo de 9 MiB no router do catalog. O identity não tem limite de taxa
 próprio: a retaguarda é o router `identity-auth` do gateway (o mesmo `auth-ratelimit` nos endpoints de credencial). O
@@ -178,8 +186,9 @@ No cart, o consumidor:
 1. descarta com ack um evento cujo `id` já está em `processed_events:{id}` (Redis, 7 dias);
 2. acha os carrinhos pelo índice reverso `variant:{variant_id}:carts` e atualiza cada um numa transação Redis
    (WATCH/MULTI), sem renovar o TTL do visitante;
-3. aplica preço e estoque só se `data.version` for maior que a versão guardada no item, e nunca reativa um item
-   arquivado (o arquivado é permanente até uma nova inclusão de produto ativo);
+3. aplica o preço só se `data.version` for maior que a `price_version` do item e o estoque só se for maior que a
+   `stock_version` (marcas por tipo, ruling S11), e nunca reativa um item arquivado (o arquivado é permanente até uma
+   nova inclusão de produto ativo);
 4. remove do índice um carrinho que já expirou, sem falhar;
 5. marca o evento como processado depois de todos os carrinhos.
 

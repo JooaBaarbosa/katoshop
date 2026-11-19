@@ -6,6 +6,7 @@ from dataclasses import replace
 
 import pytest
 from redis.asyncio import Redis
+from redis.asyncio.client import Pipeline
 from redis.exceptions import WatchError
 
 from cart.adapters import redis_repo
@@ -182,6 +183,34 @@ async def test_noop_mutate_leaves_version_and_ttl(repo: RedisCartRepository, red
     assert await repo.get(cart.cart_id) == before
     assert 0 < await redis.ttl(header) <= 100
     assert 0 < await redis.ttl(items) <= 100
+
+
+async def test_noop_mutate_retries_when_state_changes_between_reads(
+    repo: RedisCartRepository, redis: Redis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cart = await repo.new_guest()
+    items_key = f"cart:{cart.cart_id}:items"
+    original = Pipeline.hgetall
+    injected = False
+
+    async def hgetall_with_concurrent_write(self: Pipeline, name: str) -> object:
+        nonlocal injected
+        if name == items_key and not injected:
+            injected = True
+            # Outra escrita entre a leitura do cabeçalho e a dos itens: estado "rasgado".
+            await redis.hset(f"cart:{cart.cart_id}", "coupon_code", "OUTRA-ABA")
+        return await original(self, name)  # pyright: ignore[reportGeneralTypeIssues]
+
+    monkeypatch.setattr(Pipeline, "hgetall", hgetall_with_concurrent_write)
+
+    seen = await repo.mutate(cart.cart_id, lambda c: c.coupon_code)
+    monkeypatch.undo()  # o wrapper só serve ao modo imediato (WATCH), não ao pipeline do get
+
+    assert injected
+    assert seen == "OUTRA-ABA"
+    stored = await repo.get(cart.cart_id)
+    assert stored is not None
+    assert stored.version == 0
 
 
 async def test_renew_ttl_false_applies_change_and_keeps_ttl(

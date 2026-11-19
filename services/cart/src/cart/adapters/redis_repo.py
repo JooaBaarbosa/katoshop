@@ -257,7 +257,10 @@ class RedisCartRepository:
             removed = before.keys() - after.keys()
             added = after.keys() - before.keys()
             if not changed and not removed and cart.coupon_code == coupon:
-                await pipe.unwatch()
+                # EXEC vazio: as duas leituras não são um snapshot; se algo mudou sob o WATCH,
+                # WatchError faz a leitura de novo e `fn` não devolve estado rasgado.
+                pipe.multi()
+                await pipe.execute()
                 return result
             guest = owner.startswith("guest:")
             # Sem renovar: as duas chaves seguem o prazo restante do cabeçalho (a de itens pode

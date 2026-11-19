@@ -6,7 +6,18 @@ import type { PublicCategory } from "../lib/storefront";
 const ACTION =
   "inline-flex h-9 items-center gap-2 rounded-[var(--radius)] px-2 text-sm font-semibold uppercase tracking-wide";
 
-export function SiteHeader({ categories }: { categories: PublicCategory[] }) {
+/** `cartCount` null: o carrinho não respondeu, e o link aparece sem número. */
+export function SiteHeader({
+  categories,
+  cartCount,
+}: {
+  categories: PublicCategory[];
+  cartCount: number | null;
+}) {
+  const cartLabel =
+    cartCount === null
+      ? "Carrinho"
+      : `Carrinho, ${cartCount} ${cartCount === 1 ? "item" : "itens"}`;
   return (
     <header className="border-b border-ks-border">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4">
@@ -60,15 +71,14 @@ export function SiteHeader({ categories }: { categories: PublicCategory[] }) {
             <User aria-hidden className="size-4" />
             Conta
           </Link>
-          <button
-            type="button"
-            disabled
-            title="Disponível na próxima versão"
-            className={`${ACTION} cursor-not-allowed text-ks-muted`}
+          <Link
+            href="/carrinho"
+            aria-label={cartLabel}
+            className={`${ACTION} transition-colors duration-[var(--duration-fast)] hover:bg-ks-fg/10`}
           >
             <ShoppingBag aria-hidden className="size-4" />
-            Carrinho
-          </button>
+            Carrinho{cartCount !== null && <span className="tabular-nums"> ({cartCount})</span>}
+          </Link>
         </div>
       </div>
     </header>

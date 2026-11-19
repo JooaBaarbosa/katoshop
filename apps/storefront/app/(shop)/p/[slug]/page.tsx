@@ -1,8 +1,8 @@
-import { Button } from "@katoshop/ui/button";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { AddToCart } from "../../../../components/add-to-cart";
 import { PdpGallery } from "../../../../components/pdp-gallery";
 import { PriceBlock } from "../../../../components/price-block";
 import { VariantPicker } from "../../../../components/variant-picker";
@@ -101,6 +101,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
     : undefined;
 
   const variant = findVariant(detail, color, size);
+  // só uma variante disponível com cor e tamanho escolhidos pode ir para o carrinho
+  const purchasable = variant?.available ? variant.id : undefined;
   const colorPrices = detail.variants
     .filter((v) => v.color_code === color)
     .map((v) => v.price_cents);
@@ -150,12 +152,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
 
           {detail.colors.length > 0 && <VariantPicker detail={detail} color={color} size={size} />}
 
-          <div className="space-y-2">
-            <Button type="button" size="lg" className="w-full" disabled>
-              Adicionar ao carrinho
-            </Button>
-            <p className="text-sm text-ks-muted">Carrinho chega na próxima versão</p>
-          </div>
+          <AddToCart key={purchasable ?? "none"} variantId={purchasable} />
 
           {(detail.description || attributes.length > 0) && (
             <section aria-labelledby="pdp-detalhes" className="space-y-4 border-t border-ks-border pt-6">

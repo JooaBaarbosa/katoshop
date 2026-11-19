@@ -4,6 +4,8 @@ export interface ApiProblemInit {
   message: string;
   errors?: Record<string, string[]>;
   traceId?: string;
+  /** Campos além do problem+json padrão (ex.: `max` e `reason` do cart). */
+  extras?: Record<string, unknown>;
   cause?: unknown;
 }
 
@@ -13,6 +15,7 @@ export class ApiProblem extends Error {
   readonly code: string;
   readonly errors?: Record<string, string[]>;
   readonly traceId?: string;
+  readonly extras: Record<string, unknown>;
 
   constructor(init: ApiProblemInit) {
     super(init.message, init.cause === undefined ? undefined : { cause: init.cause });
@@ -21,6 +24,7 @@ export class ApiProblem extends Error {
     this.code = init.code;
     if (init.errors !== undefined) this.errors = init.errors;
     if (init.traceId !== undefined) this.traceId = init.traceId;
+    this.extras = init.extras ?? {};
   }
 }
 
@@ -37,6 +41,17 @@ function isFieldErrors(value: unknown): value is Record<string, string[]> {
   );
 }
 
+const STANDARD_FIELDS = new Set([
+  "type",
+  "title",
+  "status",
+  "detail",
+  "instance",
+  "code",
+  "trace_id",
+  "errors",
+]);
+
 export function problemFrom(error: unknown, response: Response): ApiProblem {
   const body = isRecord(error) ? error : {};
   const detail = typeof body.detail === "string" ? body.detail : undefined;
@@ -47,6 +62,7 @@ export function problemFrom(error: unknown, response: Response): ApiProblem {
     message: detail ?? title ?? (response.statusText || `HTTP ${response.status}`),
     ...(isFieldErrors(body.errors) ? { errors: body.errors } : {}),
     ...(typeof body.trace_id === "string" ? { traceId: body.trace_id } : {}),
+    extras: Object.fromEntries(Object.entries(body).filter(([key]) => !STANDARD_FIELDS.has(key))),
   });
 }
 

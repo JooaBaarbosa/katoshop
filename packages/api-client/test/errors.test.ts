@@ -44,6 +44,26 @@ describe("unwrap", () => {
     }
   });
 
+  it("guarda os campos extras do problem+json (ex.: max do cart)", () => {
+    const body = {
+      type: "about:blank",
+      title: "Quantidade acima do estoque",
+      status: 422,
+      detail: null,
+      code: "cart.item.quantity_exceeds_stock",
+      trace_id: null,
+      max: 3,
+    };
+    try {
+      unwrap({ error: body, response: problemResponse(422, body) });
+      expect.unreachable();
+    } catch (error) {
+      const problem = error as ApiProblem;
+      expect(problem.extras).toEqual({ max: 3 });
+      expect(problem.message).toBe("Quantidade acima do estoque");
+    }
+  });
+
   it("cai em valores padrão quando o corpo não é problem+json", () => {
     const response = new Response("Bad Gateway", { status: 502 });
     try {

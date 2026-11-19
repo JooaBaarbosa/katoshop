@@ -15,7 +15,8 @@ function image(url: string, color_code: string | null) {
 }
 
 function variant(color_code: string, size_code: string, available: boolean, price_cents = 14990) {
-  return { sku: `MOL-${color_code}-${size_code}`, color_code, size_code, price_cents, available };
+  const sku = `MOL-${color_code}-${size_code}`;
+  return { id: `id-${sku}`, sku, color_code, size_code, price_cents, available };
 }
 
 const detail: ProductDetail = {

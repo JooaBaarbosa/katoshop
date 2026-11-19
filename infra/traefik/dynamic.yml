@@ -85,6 +85,16 @@ http:
       service: storefront
       priority: 200
 
+    # Sem JavaScript, os outros formulários de Server Action (ex.: "Adicionar ao carrinho" em
+    # /p/<slug>) também postam sem o cabeçalho Next-Action. A loja não tem outro POST
+    # (nenhum route handler), então todo POST restante entra no mesmo limite por IP.
+    storefront-forms:
+      rule: "Host(`katoshop.localhost`) && Method(`POST`)"
+      entryPoints: [web]
+      middlewares: [auth-ratelimit]
+      service: storefront
+      priority: 150
+
     storefront:
       rule: "Host(`katoshop.localhost`)"
       entryPoints: [web]

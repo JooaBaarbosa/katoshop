@@ -25,6 +25,9 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("../lib/api", () => ({ identity: mocks.identity }));
 
+// o merge do carrinho no login tem testes próprios em cart-actions.test.ts
+vi.mock("../lib/cart", () => ({ mergeGuestCart: vi.fn() }));
+
 vi.mock("../lib/session", () => ({
   session: { setTokens: mocks.setTokens, clear: mocks.clear, withAuth: mocks.withAuth },
   getRefreshToken: mocks.getRefreshToken,

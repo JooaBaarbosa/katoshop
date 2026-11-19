@@ -129,7 +129,7 @@ def test_storefront_settings() -> None:
     assert INTERNAL_PATH.fullmatch(s["hero"]["cta_href"])
     assert INTERNAL_PATH.fullmatch(s["secondary_cta"]["href"])
     policies = s["policies"]
-    assert policies["pix_discount_percent"] == 5
+    assert policies["pix_discount_percent"] == 0
     assert policies["max_installments"] == 3
     assert policies["demo_notice"] == "Loja demonstrativa, nenhuma compra é real"
     # S14: o carrinho não calcula frete; o texto não pode prometer isso.

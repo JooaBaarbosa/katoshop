@@ -543,7 +543,9 @@ def storefront_settings(hero_image_key: str) -> dict[str, Any]:
                 "Pedidos demo não são enviados."
             ),
             "returns_text": "Troca ou devolução em até 7 dias após o recebimento.",
-            "pix_discount_percent": 5,
+            # Sem desconto no Pix até o checkout existir: a loja não mostra preço que o
+            # carrinho não aplica.
+            "pix_discount_percent": 0,
             "max_installments": 3,
             "demo_notice": "Loja demonstrativa, nenhuma compra é real",
         },
